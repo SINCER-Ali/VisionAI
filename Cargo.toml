@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "core_lib",
+    "python_binding",
+    "api_server"
+]
