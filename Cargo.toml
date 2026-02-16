@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "core_lib",
-    "python_binding",
-    "api_server"
+    "api_server",
+    "python_binding"
 ]
+resolver = "2"
