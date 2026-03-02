@@ -35,7 +35,6 @@ impl Matrix {
         let mut result = Matrix::new(self.cols, self.rows);
         for i in 0..self.rows {
             for j in 0..self.cols {
-                // On inverse i et j
                 result.data[j * self.rows + i] = self.data[i * self.cols + j];
             }
         }
@@ -52,7 +51,6 @@ impl Matrix {
             for j in 0..other.cols {
                 let mut sum = 0.0;
                 for k in 0..self.cols {
-                    // self[i, k] * other[k, j]
                     sum += self.data[i * self.cols + k] * other.data[k * other.cols + j];
                 }
                 result.data[i * result.cols + j] = sum;
@@ -64,7 +62,7 @@ impl Matrix {
 
 #[cfg(test)]
 mod tests {
-    use super::*; // Importe la struct Matrix du code au-dessus
+    use super::*; 
 
     #[test]
     fn test_multiplication_simple() {
@@ -109,25 +107,21 @@ mod tests {
 
     #[test]
     fn test_transpose() {
-        // A (1x3) : [1, 2, 3]
+
         let a = Matrix::from_flat(1, 3, vec![1.0, 2.0, 3.0]);
 
         let t = a.transpose();
 
-        // A_T (3x1) :
-        // [1]
-        // [2]
-        // [3]
         assert_eq!(t.rows, 3);
         assert_eq!(t.cols, 1);
         assert_eq!(t.data, vec![1.0, 2.0, 3.0]);
     }
 
     #[test]
-    #[should_panic] // Ce test réussit si le code plante (ce qu'on veut ici)
+    #[should_panic]
     fn test_incompatible_dimensions() {
         let a = Matrix::new(2, 2);
-        let b = Matrix::new(3, 3); // 2 != 3, ça doit paniquer
+        let b = Matrix::new(3, 3);
         let _ = a.multiply(&b);
     }
 }
