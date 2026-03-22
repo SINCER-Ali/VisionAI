@@ -1,14 +1,5 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+// Dans core_lib/src/lib.rs
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub mod math;    // Déclare le dossier math
+pub mod models;  // Déclare le dossier models
+pub mod optim;   // Déclare le dossier optim
