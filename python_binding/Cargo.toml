@@ -1,6 +1,12 @@
 [package]
-name = "python_binding"
+name = "vision_ai"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "vision_ai"
+crate-type = ["cdylib"]
+
 [dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+core_lib = { path = "../core_lib" }
