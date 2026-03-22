@@ -1,5 +1,3 @@
-// Type temporaire en attendant le module math de Valentin
-// remplacer Vec<f64> par Vector quand il aura fini
 pub type Vector = Vec<f64>;
 
 pub struct TrainConfig {
@@ -20,3 +18,4 @@ pub trait Model {
 
 pub mod linear;
 pub mod mlp;
+pub mod rbf;
