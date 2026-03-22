@@ -6,6 +6,9 @@ pub struct GradientDescentConfig {
 
 impl Default for GradientDescentConfig {
     fn default() -> Self {
-        Self { lr: 0.001, epochs: 5000 }
+        Self {
+            lr: 0.001,
+            epochs: 5000,
+        }
     }
 }

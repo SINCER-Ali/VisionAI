@@ -1,1 +1,1 @@
-mod linear;
+pub mod linear;

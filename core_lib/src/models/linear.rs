@@ -40,7 +40,6 @@ impl LinearRegression {
         sum / (y.len as f64)
     }
 
-
     pub fn fit(&mut self, x: &Matrix, y: &Vector, cfg: GradientDescentConfig) {
         assert_eq!(x.rows, y.len, "X.rows must match y.len");
         assert_eq!(x.cols, self.w.len, "X.cols must match w.len");
@@ -48,7 +47,6 @@ impl LinearRegression {
         let d = x.cols;
 
         for _epoch in 0..cfg.epochs {
-
             let y_hat = self.predict(x);
 
             let mut e = Vector::new(y.len);
@@ -59,12 +57,12 @@ impl LinearRegression {
             let scale = 1.0 / n;
 
             let mut grad_w = vec![0.0; d];
-            for j in 0..d {
+            for (j, gw) in grad_w.iter_mut().enumerate() {
                 let mut s = 0.0;
                 for i in 0..x.rows {
                     s += x.data[i * x.cols + j] * e.data[i];
                 }
-                grad_w[j] = scale * s;
+                *gw = scale * s;
             }
 
             let mut grad_b = 0.0;
@@ -73,8 +71,8 @@ impl LinearRegression {
             }
             grad_b *= scale;
 
-            for j in 0..d {
-                self.w.data[j] -= cfg.lr * grad_w[j];
+            for (j, gw) in grad_w.iter().enumerate() {
+                self.w.data[j] -= cfg.lr * gw;
             }
             self.b -= cfg.lr * grad_b;
         }
@@ -93,17 +91,28 @@ mod tests {
 
         for i in 0..n {
             let x = (i as f64) / 10.0;
-            x_data.push(x);             
-            y_data.push(3.0 * x + 2.0); 
+            x_data.push(x);
+            y_data.push(3.0 * x + 2.0);
         }
 
         let x = Matrix::from_flat(n, 1, x_data);
         let y = Vector::from_vec(y_data);
 
         let mut model = LinearRegression::new(1);
-        model.fit(&x, &y, GradientDescentConfig { lr: 0.01, epochs: 2000 });
+        model.fit(
+            &x,
+            &y,
+            GradientDescentConfig {
+                lr: 0.01,
+                epochs: 2000,
+            },
+        );
 
-        assert!((model.w.data[0] - 3.0).abs() < 1e-1, "w was {}", model.w.data[0]);
+        assert!(
+            (model.w.data[0] - 3.0).abs() < 1e-1,
+            "w was {}",
+            model.w.data[0]
+        );
         assert!((model.b - 2.0).abs() < 1e-1, "b was {}", model.b);
     }
 }
