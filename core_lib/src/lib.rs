@@ -1,5 +1,4 @@
-// Dans core_lib/src/lib.rs
+pub mod math;
+pub mod models;
+pub mod optim;
 
-pub mod math; // Déclare le dossier math
-pub mod models; // Déclare le dossier models
-pub mod optim; // Déclare le dossier optim

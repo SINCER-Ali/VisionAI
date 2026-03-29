@@ -1,80 +1,51 @@
-use crate::math::matrix::Matrix;
-use crate::math::vector::Vector;
-use crate::optim::gradient_descent::GradientDescentConfig;
+use super::{Model, TrainConfig, Vector};
 
-#[derive(Clone, Debug)]
-pub struct LinearRegression {
-    pub w: Vector,
-    pub b: f64,
+pub struct LinearModel {
+    pub weights: Vector,
+    pub bias: f64,
+    pub input_size: usize,
 }
 
-impl LinearRegression {
-    pub fn new(n_features: usize) -> Self {
-        Self {
-            w: Vector::new(n_features),
-            b: 0.0,
+impl LinearModel {
+    pub fn new(input_size: usize) -> Self {
+        LinearModel {
+            weights: vec![0.0; input_size],
+            bias: 0.0,
+            input_size,
         }
     }
+}
 
-    pub fn predict(&self, x: &Matrix) -> Vector {
-        assert_eq!(x.cols, self.w.len, "X.cols must match w.len");
-        let mut out = Vector::new(x.rows);
-
-        for i in 0..x.rows {
-            let mut s = self.b;
-            for j in 0..x.cols {
-                s += x.data[i * x.cols + j] * self.w.data[j];
-            }
-            out.data[i] = s;
+impl Model for LinearModel {
+    fn predict(&self, input: &Vector) -> Vector {
+        let mut result = self.bias;
+        for i in 0..self.input_size {
+            result += self.weights[i] * input[i];
         }
-        out
+        vec![result]
     }
 
-    pub fn mse_loss(y_hat: &Vector, y: &Vector) -> f64 {
-        assert_eq!(y_hat.len, y.len, "y_hat and y must have same length");
-        let mut sum = 0.0;
-        for i in 0..y.len {
-            let e = y_hat.data[i] - y.data[i];
-            sum += e * e;
-        }
-        sum / (y.len as f64)
-    }
-
-    pub fn fit(&mut self, x: &Matrix, y: &Vector, cfg: GradientDescentConfig) {
-        assert_eq!(x.rows, y.len, "X.rows must match y.len");
-        assert_eq!(x.cols, self.w.len, "X.cols must match w.len");
-        let n = x.rows as f64;
-        let d = x.cols;
-
-        for _epoch in 0..cfg.epochs {
-            let y_hat = self.predict(x);
-
-            let mut e = Vector::new(y.len);
-            for i in 0..y.len {
-                e.data[i] = y_hat.data[i] - y.data[i];
-            }
-
-            let scale = 1.0 / n;
-
-            let mut grad_w = vec![0.0; d];
-            for (j, gw) in grad_w.iter_mut().enumerate() {
-                let mut s = 0.0;
-                for i in 0..x.rows {
-                    s += x.data[i * x.cols + j] * e.data[i];
+    fn train(
+        &mut self,
+        inputs: &[Vector],
+        targets: &[Vector],
+        config: &TrainConfig,
+    ) {
+        for epoch in 0..config.epochs {
+            let mut total_loss = 0.0;
+            for (input, target) in inputs.iter().zip(targets.iter()) {
+                let prediction = self.predict(input)[0];
+                let target_val = target[0];
+                let error = prediction - target_val;
+                total_loss += error * error;
+                for i in 0..self.input_size {
+                    self.weights[i] -= config.learning_rate * 2.0 * error * input[i];
                 }
-                *gw = scale * s;
+                self.bias -= config.learning_rate * 2.0 * error;
             }
-
-            let mut grad_b = 0.0;
-            for i in 0..e.len {
-                grad_b += e.data[i];
+            if epoch % 10 == 0 {
+                println!("Epoque {} - Loss: {:.6}", epoch, total_loss / inputs.len() as f64);
             }
-            grad_b *= scale;
-
-            for (j, gw) in grad_w.iter().enumerate() {
-                self.w.data[j] -= cfg.lr * gw;
-            }
-            self.b -= cfg.lr * grad_b;
         }
     }
 }
@@ -84,35 +55,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn learns_simple_1d_line() {
-        let n = 200usize;
-        let mut x_data = Vec::with_capacity(n);
-        let mut y_data = Vec::with_capacity(n);
+    fn test_predict() {
+        let mut model = LinearModel::new(2);
+        model.weights = vec![1.0, 2.0];
+        model.bias = 1.0;
+        let input = vec![3.0, 4.0];
+        let result = model.predict(&input);
+        assert_eq!(result[0], 12.0);
+    }
 
-        for i in 0..n {
-            let x = (i as f64) / 10.0;
-            x_data.push(x);
-            y_data.push(3.0 * x + 2.0);
-        }
-
-        let x = Matrix::from_flat(n, 1, x_data);
-        let y = Vector::from_vec(y_data);
-
-        let mut model = LinearRegression::new(1);
-        model.fit(
-            &x,
-            &y,
-            GradientDescentConfig {
-                lr: 0.01,
-                epochs: 2000,
-            },
-        );
-
-        assert!(
-            (model.w.data[0] - 3.0).abs() < 1e-1,
-            "w was {}",
-            model.w.data[0]
-        );
-        assert!((model.b - 2.0).abs() < 1e-1, "b was {}", model.b);
+    #[test]
+    fn test_train_loss_diminue() {
+        let mut model = LinearModel::new(2);
+        let inputs = vec![vec![1.0, 2.0]];
+        let targets = vec![vec![5.0]];
+        let config = TrainConfig {
+            learning_rate: 0.01,
+            epochs: 100,
+        };
+        model.train(&inputs, &targets, &config);
+        let result = model.predict(&inputs[0])[0];
+        let ecart = (result - 5.0).abs();
+        assert!(ecart < 0.1, "La prediction devrait etre proche de 5.0, got {}", result);
     }
 }
