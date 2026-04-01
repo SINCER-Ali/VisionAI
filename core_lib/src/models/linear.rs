@@ -1,5 +1,7 @@
 use super::{Model, TrainConfig, Vector};
+use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LinearModel {
     pub weights: Vector,
     pub bias: f64,
@@ -13,6 +15,32 @@ impl LinearModel {
             bias: 0.0,
             input_size,
         }
+    }
+}
+
+impl LinearModel {
+    pub fn save_json(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let json = serde_json::to_string_pretty(self)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    pub fn load_json(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let content = std::fs::read_to_string(path)?;
+        let model: LinearModel = serde_json::from_str(&content)?;
+        Ok(model)
+    }
+
+    pub fn save_binary(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let encoded = bincode::serialize(self)?;
+        std::fs::write(path, encoded)?;
+        Ok(())
+    }
+
+    pub fn load_binary(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let data = std::fs::read(path)?;
+        let model: LinearModel = bincode::deserialize(&data)?;
+        Ok(model)
     }
 }
 
