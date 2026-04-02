@@ -1,6 +1,7 @@
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Matrix {
     pub rows: usize,
     pub cols: usize,
@@ -8,7 +9,6 @@ pub struct Matrix {
 }
 
 impl Matrix {
-
     pub fn new(rows: usize, cols: usize) -> Self {
         Matrix {
             rows,
@@ -17,19 +17,16 @@ impl Matrix {
         }
     }
 
-
     pub fn random(rows: usize, cols: usize) -> Self {
         let mut rng = rand::thread_rng();
         let data: Vec<f64> = (0..rows * cols).map(|_| rng.gen_range(-1.0..1.0)).collect();
         Matrix { rows, cols, data }
     }
 
-
     pub fn from_flat(rows: usize, cols: usize, data: Vec<f64>) -> Self {
         assert_eq!(rows * cols, data.len(), "Dimension mismatch");
         Matrix { rows, cols, data }
     }
-
 
     pub fn transpose(&self) -> Self {
         let mut result = Matrix::new(self.cols, self.rows);
@@ -41,9 +38,11 @@ impl Matrix {
         result
     }
 
-
     pub fn multiply(&self, other: &Matrix) -> Matrix {
-        assert_eq!(self.cols, other.rows, "Matrix dimensions strictly incompatible for multiplication");
+        assert_eq!(
+            self.cols, other.rows,
+            "Matrix dimensions strictly incompatible for multiplication"
+        );
 
         let mut result = Matrix::new(self.rows, other.cols);
 
@@ -62,7 +61,7 @@ impl Matrix {
 
 #[cfg(test)]
 mod tests {
-    use super::*; 
+    use super::*;
 
     #[test]
     fn test_multiplication_simple() {
@@ -107,7 +106,6 @@ mod tests {
 
     #[test]
     fn test_transpose() {
-
         let a = Matrix::from_flat(1, 3, vec![1.0, 2.0, 3.0]);
 
         let t = a.transpose();

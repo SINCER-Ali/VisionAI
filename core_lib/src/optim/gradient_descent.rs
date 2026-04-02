@@ -1,4 +1,4 @@
-use crate::models::{Vector, TrainConfig};
+use crate::models::Vector;
 
 #[derive(Clone, Copy, Debug)]
 pub struct GradientDescentConfig {

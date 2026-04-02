@@ -1,7 +1,14 @@
+use crate::math::activations::{Activation, softmax};
 use crate::math::vector::Vector;
 use crate::optim::gradient_descent::GradientDescentConfig;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
+fn default_activation() -> Activation {
+    Activation::ReLU
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Layer {
     pub weights: Vec<Vector>,
     pub biases: Vector,
@@ -35,25 +42,11 @@ impl Layer {
     }
 }
 
-fn relu(v: &Vector) -> Vector {
-    let data = v.data.iter().map(|x| x.max(0.0)).collect();
-    Vector::from_vec(data)
-}
-
-fn relu_derivative(v: &Vector) -> Vector {
-    let data = v.data.iter().map(|x| if *x > 0.0 { 1.0 } else { 0.0 }).collect();
-    Vector::from_vec(data)
-}
-
-fn softmax(v: &Vector) -> Vector {
-    let max = v.data.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-    let exps: Vec<f64> = v.data.iter().map(|x| (x - max).exp()).collect();
-    let sum: f64 = exps.iter().sum();
-    Vector::from_vec(exps.iter().map(|x| x / sum).collect())
-}
-
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MLP {
     pub layers: Vec<Layer>,
+    #[serde(default = "default_activation")]
+    pub hidden_activation: Activation,
 }
 
 impl MLP {
@@ -62,7 +55,15 @@ impl MLP {
             .windows(2)
             .map(|w| Layer::new(w[0], w[1]))
             .collect();
-        MLP { layers }
+        MLP {
+            layers,
+            hidden_activation: Activation::ReLU,
+        }
+    }
+
+    pub fn with_activation(mut self, activation: Activation) -> Self {
+        self.hidden_activation = activation;
+        self
     }
 
     pub fn predict(&self, input: &Vector) -> Vector {
@@ -72,7 +73,7 @@ impl MLP {
             current = if i == self.layers.len() - 1 {
                 softmax(&z)
             } else {
-                relu(&z)
+                self.hidden_activation.apply(&z)
             };
         }
         current
@@ -90,7 +91,7 @@ impl MLP {
                     let a = if i == self.layers.len() - 1 {
                         softmax(&z)
                     } else {
-                        relu(&z)
+                        self.hidden_activation.apply(&z)
                     };
                     activations.push(a);
                 }
@@ -115,12 +116,40 @@ impl MLP {
                                 new_delta.data[j] += self.layers[l].weights[i].data[j] * delta.data[i];
                             }
                         }
-                        let rd = relu_derivative(&zs[l - 1]);
+                        let rd = self.hidden_activation.derivative(&zs[l - 1]);
                         delta = new_delta.hadamard(&rd);
                     }
                 }
             }
         }
+    }
+
+    /// Sauvegarde le modele au format JSON
+    pub fn save_json(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let json = serde_json::to_string_pretty(self)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    /// Charge un modele depuis un fichier JSON
+    pub fn load_json(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let content = std::fs::read_to_string(path)?;
+        let model: MLP = serde_json::from_str(&content)?;
+        Ok(model)
+    }
+
+    /// Sauvegarde le modele au format binaire (bincode)
+    pub fn save_binary(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        let encoded = bincode::serialize(self)?;
+        std::fs::write(path, encoded)?;
+        Ok(())
+    }
+
+    /// Charge un modele depuis un fichier binaire
+    pub fn load_binary(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let data = std::fs::read(path)?;
+        let model: MLP = bincode::deserialize(&data)?;
+        Ok(model)
     }
 }
 
