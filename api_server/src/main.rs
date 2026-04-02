@@ -7,9 +7,11 @@ use std::{
 };
 
 use axum::{
+    body::Body,
     extract::State,
-    http::StatusCode,
-    response::IntoResponse,
+    http::{header, HeaderValue, Method, Request, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
@@ -111,6 +113,7 @@ struct ReloadResponse {
     loaded_models: usize,
 }
 
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt().with_env_filter("info").init();
@@ -128,6 +131,8 @@ async fn main() {
         .route("/train", post(train))
         .route("/models", get(list_models))
         .route("/reload-models", post(reload_models))
+        .route("/health", get(health))
+        .layer(middleware::from_fn(cors_middleware))
         .with_state(state);
 
     let addr: SocketAddr = "0.0.0.0:3000".parse().unwrap();
@@ -136,6 +141,59 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
+
+async fn health() -> impl IntoResponse {
+    (StatusCode::OK, "ok")
+}
+
+async fn cors_middleware(req: Request<Body>, next: Next) -> Response {
+    if req.method() == Method::OPTIONS {
+        return preflight().await;
+    }
+
+    let mut response = next.run(req).await;
+
+    response.headers_mut().insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        HeaderValue::from_static("*"),
+    );
+    response.headers_mut().insert(
+        header::ACCESS_CONTROL_ALLOW_METHODS,
+        HeaderValue::from_static("GET, POST, OPTIONS"),
+    );
+    response.headers_mut().insert(
+        header::ACCESS_CONTROL_ALLOW_HEADERS,
+        HeaderValue::from_static("Content-Type"),
+    );
+
+    response
+}
+
+async fn preflight() -> Response {
+    (
+        StatusCode::NO_CONTENT,
+        [
+            (
+                header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                HeaderValue::from_static("*"),
+            ),
+            (
+                header::ACCESS_CONTROL_ALLOW_METHODS,
+                HeaderValue::from_static("GET, POST, OPTIONS"),
+            ),
+            (
+                header::ACCESS_CONTROL_ALLOW_HEADERS,
+                HeaderValue::from_static("Content-Type"),
+            ),
+            (
+                header::ACCESS_CONTROL_MAX_AGE,
+                HeaderValue::from_static("86400"),
+            ),
+        ],
+    )
+        .into_response()
+}
+
 
 async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsResponse>, ApiError> {
     let models = state
@@ -319,8 +377,14 @@ fn run_prediction(model: &StoredModel, input: &Vector) -> (String, f64) {
             m.bias = *bias;
 
             let out = m.predict(input)[0];
-            let confidence = out.abs().min(1.0);
-            let class = if out >= 0.5 { "positive" } else { "negative" };
+
+            let (class, confidence) = if out >= 0.66 {
+                ("animal", out.min(1.0))
+            } else if out >= 0.33 {
+                ("humain", out.min(1.0))
+            } else {
+                ("rien", (1.0 - out.abs()).max(0.0))
+            };
 
             (class.to_string(), confidence)
         }
