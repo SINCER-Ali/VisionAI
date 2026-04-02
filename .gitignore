@@ -1,1 +1,6 @@
 /target
+datasets/*.npy
+datasets/train/
+datasets/test/
+notebooks/.ipynb_checkpoints/
+target/
