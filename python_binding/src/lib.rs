@@ -89,6 +89,7 @@ struct PyMatrix {
 #[pymethods]
 impl PyMatrix {
     #[new]
+    #[pyo3(signature = (rows, cols, data=None))]
     fn new(rows: usize, cols: usize, data: Option<Vec<f64>>) -> PyResult<Self> {
         let inner = if let Some(data) = data {
             if data.len() != rows * cols {
@@ -98,7 +99,6 @@ impl PyMatrix {
         } else {
             CoreMatrix::new(rows, cols)
         };
-
         Ok(Self { inner })
     }
 
@@ -192,6 +192,7 @@ impl PyMLP {
 }
 
 #[pyfunction]
+#[pyo3(signature = (model_type, params=None))]
 fn create_model(py: Python<'_>, model_type: &str, params: Option<&Bound<'_, PyDict>>) -> PyResult<Py<PyAny>> {
     match model_type {
         "linear" | "linear_regression" => {
@@ -290,7 +291,7 @@ fn load(py: Python<'_>, path: String) -> PyResult<Py<PyAny>> {
 }
 
 #[pymodule]
-fn visionai(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn vision_ai(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyVector>()?;
     m.add_class::<PyMatrix>()?;
     m.add_class::<LinearRegression>()?;

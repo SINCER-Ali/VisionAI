@@ -10,10 +10,11 @@
       <sourceFolder url="file://$MODULE_DIR$/api_server/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/core_lib/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/python_binding/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/core_lib/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/python_binding/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" name="Python 3.11 (VisionAI) interpreter library" level="application" />
   </component>
 </module>

@@ -14,5 +14,6 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 walkdir = "2.5.0"
 tokio = { version = "1.50.0", features = ["full"] }
+image = "0.25"
 
 core_lib = { path = "../core_lib" }
