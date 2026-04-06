@@ -189,6 +189,19 @@ impl PyMLP {
         };
         self.model.train(&inputs, &targets, cfg);
     }
+
+    fn save_json(&self, path: String) -> PyResult<()> {
+        self.model
+            .save_json(&path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    #[staticmethod]
+    fn load_json(path: String) -> PyResult<PyMLP> {
+        let model = MLP::load_json(&path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(PyMLP { model })
+    }
 }
 
 #[pyfunction]

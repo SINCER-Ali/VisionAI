@@ -29,6 +29,10 @@ accuracy = correct / len(y_test) * 100
 print(f'Accuracy : {accuracy:.1f}%')
 
 os.makedirs('models', exist_ok=True)
+
+model.save_json('models/mlp_weights.json')
+print('Poids sauvegardes dans models/mlp_weights.json !')
+
 weights_data = {'layer_sizes': [12288, 64, 3], 'accuracy': accuracy}
 with open('models/mlp_config.json', 'w') as f:
     json.dump(weights_data, f)

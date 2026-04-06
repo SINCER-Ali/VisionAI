@@ -153,18 +153,19 @@ async fn main() {
 }
 
 fn load_mlp_model() -> Option<MLP> {
-    let config_path = "models/mlp_config.json";
-    if !std::path::Path::new(config_path).exists() {
-        return None;
+    let weights_path = "models/mlp_weights.json";
+    if std::path::Path::new(weights_path).exists() {
+        match MLP::load_json(weights_path) {
+            Ok(mlp) => {
+                info!("MLP charge depuis {}", weights_path);
+                return Some(mlp);
+            }
+            Err(e) => {
+                error!("Erreur chargement poids MLP: {}", e);
+            }
+        }
     }
-    let content = fs::read_to_string(config_path).ok()?;
-    let config: serde_json::Value = serde_json::from_str(&content).ok()?;
-    let layer_sizes: Vec<usize> = config["layer_sizes"]
-        .as_array()?
-        .iter()
-        .filter_map(|v| v.as_u64().map(|n| n as usize))
-        .collect();
-    Some(MLP::new(&layer_sizes))
+    None
 }
 
 async fn health() -> impl IntoResponse {
