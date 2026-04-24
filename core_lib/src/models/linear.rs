@@ -47,8 +47,8 @@ impl LinearModel {
 impl Model for LinearModel {
     fn predict(&self, input: &Vector) -> Vector {
         let mut result = self.bias;
-        for i in 0..self.input_size {
-            result += self.weights[i] * input[i];
+        for (i, item) in input.iter().enumerate().take(self.input_size) {
+            result += self.weights[i] * *item;
         }
         vec![result]
     }
@@ -61,8 +61,10 @@ impl Model for LinearModel {
                 let target_val = target[0];
                 let error = prediction - target_val;
                 total_loss += error * error;
-                for i in 0..self.input_size {
-                    self.weights[i] -= config.learning_rate * 2.0 * error * input[i];
+
+                for (i, item) in input.iter().enumerate().take(self.input_size) {
+                    self.weights[i] -=
+                        config.learning_rate * 2.0 * error * *item;
                 }
                 self.bias -= config.learning_rate * 2.0 * error;
             }
