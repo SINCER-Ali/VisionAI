@@ -10,11 +10,7 @@ pub fn sigmoid(v: &Vector) -> Vector {
 /// Derivee de sigmoid : s(x) * (1 - s(x))
 pub fn sigmoid_derivative(v: &Vector) -> Vector {
     let s = sigmoid(v);
-    let data = s
-        .data
-        .iter()
-        .map(|si| si * (1.0 - si))
-        .collect();
+    let data = s.data.iter().map(|si| si * (1.0 - si)).collect();
     Vector::from_vec(data)
 }
 
@@ -26,10 +22,14 @@ pub fn tanh(v: &Vector) -> Vector {
 
 /// Derivee de tanh : 1 - tanh(x)^2
 pub fn tanh_derivative(v: &Vector) -> Vector {
-    let data = v.data.iter().map(|x| {
-        let t = x.tanh();
-        1.0 - t * t
-    }).collect();
+    let data = v
+        .data
+        .iter()
+        .map(|x| {
+            let t = x.tanh();
+            1.0 - t * t
+        })
+        .collect();
     Vector::from_vec(data)
 }
 

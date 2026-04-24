@@ -1,6 +1,4 @@
-use core_lib::math::activations::{
-    self, Activation, relu, sigmoid, softmax, tanh,
-};
+use core_lib::math::activations::{self, Activation, relu, sigmoid, softmax, tanh};
 use core_lib::math::matrix::Matrix;
 use core_lib::math::vector::Vector;
 use core_lib::models::linear::LinearModel;
@@ -214,13 +212,8 @@ fn linear_model_predict_zero_weights() {
 fn linear_model_train_converges() {
     let mut model = LinearModel::new(1);
     // y = 3*x + 1
-    let inputs: Vec<Vec<f64>> = (0..50)
-        .map(|i| vec![i as f64 / 50.0])
-        .collect();
-    let targets: Vec<Vec<f64>> = inputs
-        .iter()
-        .map(|x| vec![3.0 * x[0] + 1.0])
-        .collect();
+    let inputs: Vec<Vec<f64>> = (0..50).map(|i| vec![i as f64 / 50.0]).collect();
+    let targets: Vec<Vec<f64>> = inputs.iter().map(|x| vec![3.0 * x[0] + 1.0]).collect();
     let config = TrainConfig {
         learning_rate: 0.05,
         epochs: 200,
@@ -231,7 +224,9 @@ fn linear_model_train_converges() {
     let expected = 3.0 * 0.5 + 1.0;
     assert!(
         (pred[0] - expected).abs() < 0.5,
-        "prediction {} should be close to {}", pred[0], expected
+        "prediction {} should be close to {}",
+        pred[0],
+        expected
     );
 }
 
@@ -291,7 +286,16 @@ fn mlp_xor() {
     let expected = vec![0, 1, 1, 0];
 
     assert!(
-        train_and_check(&[2, 16, 2], &inputs, &targets, &expected, 1.0, 5000, 5, Activation::Sigmoid),
+        train_and_check(
+            &[2, 16, 2],
+            &inputs,
+            &targets,
+            &expected,
+            1.0,
+            5000,
+            5,
+            Activation::Sigmoid
+        ),
         "XOR devrait converger en 5 tentatives"
     );
 }
@@ -315,7 +319,16 @@ fn mlp_and() {
     let expected = vec![0, 0, 0, 1];
 
     assert!(
-        train_and_check(&[2, 8, 2], &inputs, &targets, &expected, 1.0, 5000, 5, Activation::Sigmoid),
+        train_and_check(
+            &[2, 8, 2],
+            &inputs,
+            &targets,
+            &expected,
+            1.0,
+            5000,
+            5,
+            Activation::Sigmoid
+        ),
         "AND devrait converger en 5 tentatives"
     );
 }
@@ -339,7 +352,16 @@ fn mlp_or() {
     let expected = vec![0, 1, 1, 1];
 
     assert!(
-        train_and_check(&[2, 8, 2], &inputs, &targets, &expected, 1.0, 3000, 5, Activation::Sigmoid),
+        train_and_check(
+            &[2, 8, 2],
+            &inputs,
+            &targets,
+            &expected,
+            1.0,
+            3000,
+            5,
+            Activation::Sigmoid
+        ),
         "OR devrait converger en 5 tentatives"
     );
 }
@@ -373,7 +395,16 @@ fn mlp_multiclass() {
     let expected = vec![0, 0, 0, 1, 1, 1, 2, 2, 2];
 
     assert!(
-        train_and_check(&[2, 16, 3], &inputs, &targets, &expected, 0.5, 5000, 5, Activation::Sigmoid),
+        train_and_check(
+            &[2, 16, 3],
+            &inputs,
+            &targets,
+            &expected,
+            0.5,
+            5000,
+            5,
+            Activation::Sigmoid
+        ),
         "Multi-class devrait converger en 5 tentatives"
     );
 }
@@ -400,7 +431,16 @@ fn mlp_regression_sine() {
     }
 
     assert!(
-        train_and_check(&[1, 16, 2], &inputs, &targets, &expected, 0.5, 3000, 5, Activation::Sigmoid),
+        train_and_check(
+            &[1, 16, 2],
+            &inputs,
+            &targets,
+            &expected,
+            0.5,
+            3000,
+            5,
+            Activation::Sigmoid
+        ),
         "Regression sinus devrait converger en 5 tentatives"
     );
 }
@@ -410,7 +450,10 @@ fn mlp_regression_sine() {
 #[test]
 fn mlp_with_sigmoid_activation() {
     let mut mlp = MLP::new(&[2, 8, 2]).with_activation(Activation::Sigmoid);
-    let cfg = GradientDescentConfig { lr: 1.0, epochs: 3000 };
+    let cfg = GradientDescentConfig {
+        lr: 1.0,
+        epochs: 3000,
+    };
 
     let inputs = vec![
         Vector::from_vec(vec![0.0, 0.0]),
@@ -434,7 +477,10 @@ fn mlp_with_sigmoid_activation() {
 #[test]
 fn mlp_with_tanh_activation() {
     let mut mlp = MLP::new(&[2, 8, 2]).with_activation(Activation::Tanh);
-    let cfg = GradientDescentConfig { lr: 0.5, epochs: 3000 };
+    let cfg = GradientDescentConfig {
+        lr: 0.5,
+        epochs: 3000,
+    };
 
     let inputs = vec![
         Vector::from_vec(vec![0.0, 0.0]),
@@ -483,7 +529,10 @@ fn mlp_serialize_binary_roundtrip() {
     let pred_after = loaded.predict(&input);
 
     for (a, b) in pred_before.data.iter().zip(pred_after.data.iter()) {
-        assert!((a - b).abs() < 1e-10, "Binary roundtrip: predictions differ");
+        assert!(
+            (a - b).abs() < 1e-10,
+            "Binary roundtrip: predictions differ"
+        );
     }
 
     std::fs::remove_file(path).ok();

@@ -8,7 +8,10 @@ pub struct GradientDescentConfig {
 
 impl Default for GradientDescentConfig {
     fn default() -> Self {
-        Self { lr: 0.001, epochs: 5000 }
+        Self {
+            lr: 0.001,
+            epochs: 5000,
+        }
     }
 }
 
@@ -21,13 +24,7 @@ impl GradientDescent {
         GradientDescent { learning_rate }
     }
 
-    pub fn update_weights(
-        &self,
-        weights: &mut Vector,
-        bias: &mut f64,
-        input: &Vector,
-        error: f64,
-    ) {
+    pub fn update_weights(&self, weights: &mut Vector, bias: &mut f64, input: &Vector, error: f64) {
         for i in 0..weights.len() {
             weights[i] -= self.learning_rate * 2.0 * error * input[i];
         }

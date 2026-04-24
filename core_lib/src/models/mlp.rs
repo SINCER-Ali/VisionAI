@@ -21,16 +21,19 @@ impl Layer {
         let mut rng = rand::thread_rng();
         let weights = (0..output_size)
             .map(|_| {
-                let data: Vec<f64> = (0..input_size)
-                    .map(|_| rng.gen_range(-0.5..0.5))
-                    .collect();
+                let data: Vec<f64> = (0..input_size).map(|_| rng.gen_range(-0.5..0.5)).collect();
                 Vector::from_vec(data)
             })
             .collect();
 
         let biases = Vector::new(output_size);
 
-        Layer { weights, biases, input_size, output_size }
+        Layer {
+            weights,
+            biases,
+            input_size,
+            output_size,
+        }
     }
 
     pub fn forward(&self, input: &Vector) -> Vector {
@@ -104,7 +107,8 @@ impl MLP {
 
                     for i in 0..self.layers[l].output_size {
                         for j in 0..self.layers[l].input_size {
-                            self.layers[l].weights[i].data[j] -= cfg.lr * delta.data[i] * a_prev.data[j];
+                            self.layers[l].weights[i].data[j] -=
+                                cfg.lr * delta.data[i] * a_prev.data[j];
                         }
                         self.layers[l].biases.data[i] -= cfg.lr * delta.data[i];
                     }
@@ -113,7 +117,8 @@ impl MLP {
                         let mut new_delta = Vector::new(self.layers[l].input_size);
                         for j in 0..self.layers[l].input_size {
                             for i in 0..self.layers[l].output_size {
-                                new_delta.data[j] += self.layers[l].weights[i].data[j] * delta.data[i];
+                                new_delta.data[j] +=
+                                    self.layers[l].weights[i].data[j] * delta.data[i];
                             }
                         }
                         let rd = self.hidden_activation.derivative(&zs[l - 1]);
@@ -171,6 +176,10 @@ mod tests {
         let input = Vector::from_vec(vec![0.5, 0.2, 0.8, 0.1]);
         let output = mlp.predict(&input);
         let sum: f64 = output.data.iter().sum();
-        assert!((sum - 1.0).abs() < 1e-6, "Softmax doit sommer a 1.0, got {}", sum);
+        assert!(
+            (sum - 1.0).abs() < 1e-6,
+            "Softmax doit sommer a 1.0, got {}",
+            sum
+        );
     }
 }

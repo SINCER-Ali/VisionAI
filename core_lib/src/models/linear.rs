@@ -53,12 +53,7 @@ impl Model for LinearModel {
         vec![result]
     }
 
-    fn train(
-        &mut self,
-        inputs: &[Vector],
-        targets: &[Vector],
-        config: &TrainConfig,
-    ) {
+    fn train(&mut self, inputs: &[Vector], targets: &[Vector], config: &TrainConfig) {
         for epoch in 0..config.epochs {
             let mut total_loss = 0.0;
             for (input, target) in inputs.iter().zip(targets.iter()) {
@@ -72,7 +67,11 @@ impl Model for LinearModel {
                 self.bias -= config.learning_rate * 2.0 * error;
             }
             if epoch % 10 == 0 {
-                println!("Epoque {} - Loss: {:.6}", epoch, total_loss / inputs.len() as f64);
+                println!(
+                    "Epoque {} - Loss: {:.6}",
+                    epoch,
+                    total_loss / inputs.len() as f64
+                );
             }
         }
     }
@@ -104,6 +103,10 @@ mod tests {
         model.train(&inputs, &targets, &config);
         let result = model.predict(&inputs[0])[0];
         let ecart = (result - 5.0).abs();
-        assert!(ecart < 0.1, "La prediction devrait etre proche de 5.0, got {}", result);
+        assert!(
+            ecart < 0.1,
+            "La prediction devrait etre proche de 5.0, got {}",
+            result
+        );
     }
 }

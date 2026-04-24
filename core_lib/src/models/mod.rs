@@ -8,12 +8,7 @@ pub struct TrainConfig {
 pub trait Model {
     fn predict(&self, input: &Vector) -> Vector;
 
-    fn train(
-        &mut self,
-        inputs: &[Vector],
-        targets: &[Vector],
-        config: &TrainConfig,
-    );
+    fn train(&mut self, inputs: &[Vector], targets: &[Vector], config: &TrainConfig);
 }
 
 pub mod linear;

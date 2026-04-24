@@ -51,14 +51,18 @@ impl PyVector {
 
     fn dot(&self, other: &PyVector) -> PyResult<f64> {
         if self.inner.len != other.inner.len {
-            return Err(pyo3::exceptions::PyValueError::new_err("dimension mismatch"));
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "dimension mismatch",
+            ));
         }
         Ok(self.inner.dot(&other.inner))
     }
 
     fn add(&self, other: &PyVector) -> PyResult<PyVector> {
         if self.inner.len != other.inner.len {
-            return Err(pyo3::exceptions::PyValueError::new_err("dimension mismatch"));
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "dimension mismatch",
+            ));
         }
         Ok(PyVector {
             inner: self.inner.add(&other.inner),
@@ -67,7 +71,9 @@ impl PyVector {
 
     fn sub(&self, other: &PyVector) -> PyResult<PyVector> {
         if self.inner.len != other.inner.len {
-            return Err(pyo3::exceptions::PyValueError::new_err("dimension mismatch"));
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "dimension mismatch",
+            ));
         }
         Ok(PyVector {
             inner: self.inner.sub(&other.inner),
@@ -93,7 +99,9 @@ impl PyMatrix {
     fn new(rows: usize, cols: usize, data: Option<Vec<f64>>) -> PyResult<Self> {
         let inner = if let Some(data) = data {
             if data.len() != rows * cols {
-                return Err(pyo3::exceptions::PyValueError::new_err("invalid matrix size"));
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "invalid matrix size",
+                ));
             }
             CoreMatrix::from_flat(rows, cols, data)
         } else {
@@ -145,7 +153,13 @@ impl LinearRegression {
         Ok(self.model.predict(&input))
     }
 
-    fn train(&mut self, x: Vec<Vec<f64>>, y: Vec<Vec<f64>>, epochs: usize, lr: f64) -> PyResult<()> {
+    fn train(
+        &mut self,
+        x: Vec<Vec<f64>>,
+        y: Vec<Vec<f64>>,
+        epochs: usize,
+        lr: f64,
+    ) -> PyResult<()> {
         let cfg = TrainConfig {
             learning_rate: lr,
             epochs,
@@ -206,10 +220,15 @@ impl PyMLP {
 
 #[pyfunction]
 #[pyo3(signature = (model_type, params=None))]
-fn create_model(py: Python<'_>, model_type: &str, params: Option<&Bound<'_, PyDict>>) -> PyResult<Py<PyAny>> {
+fn create_model(
+    py: Python<'_>,
+    model_type: &str,
+    params: Option<&Bound<'_, PyDict>>,
+) -> PyResult<Py<PyAny>> {
     match model_type {
         "linear" | "linear_regression" => {
-            let params = params.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing params"))?;
+            let params =
+                params.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing params"))?;
             let input_size: usize = params
                 .get_item("input_size")?
                 .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("input_size"))?
@@ -217,19 +236,28 @@ fn create_model(py: Python<'_>, model_type: &str, params: Option<&Bound<'_, PyDi
             Ok(Py::new(py, LinearRegression::new(input_size))?.into_any())
         }
         "mlp" => {
-            let params = params.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing params"))?;
+            let params =
+                params.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing params"))?;
             let layer_sizes: Vec<usize> = params
                 .get_item("layer_sizes")?
                 .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("layer_sizes"))?
                 .extract()?;
             Ok(Py::new(py, PyMLP::new(layer_sizes))?.into_any())
         }
-        _ => Err(pyo3::exceptions::PyValueError::new_err("unknown model_type")),
+        _ => Err(pyo3::exceptions::PyValueError::new_err(
+            "unknown model_type",
+        )),
     }
 }
 
 #[pyfunction]
-fn train(model: &Bound<'_, PyAny>, x: Vec<Vec<f64>>, y: Vec<Vec<f64>>, epochs: usize, lr: f64) -> PyResult<()> {
+fn train(
+    model: &Bound<'_, PyAny>,
+    x: Vec<Vec<f64>>,
+    y: Vec<Vec<f64>>,
+    epochs: usize,
+    lr: f64,
+) -> PyResult<()> {
     if let Ok(mut m) = model.extract::<PyRefMut<'_, LinearRegression>>() {
         m.train(x, y, epochs, lr)
     } else if let Ok(mut m) = model.extract::<PyRefMut<'_, PyMLP>>() {
@@ -260,13 +288,16 @@ fn save(model: &Bound<'_, PyAny>, path: String) -> PyResult<()> {
         );
         fs::write(path, content).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     } else {
-        Err(pyo3::exceptions::PyTypeError::new_err("save is implemented only for LinearRegression"))
+        Err(pyo3::exceptions::PyTypeError::new_err(
+            "save is implemented only for LinearRegression",
+        ))
     }
 }
 
 #[pyfunction]
 fn load(py: Python<'_>, path: String) -> PyResult<Py<PyAny>> {
-    let content = fs::read_to_string(path).map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+    let content = fs::read_to_string(path)
+        .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
 
     let mut input_size: Option<usize> = None;
     let mut weights: Option<Vec<f64>> = None;
@@ -274,7 +305,10 @@ fn load(py: Python<'_>, path: String) -> PyResult<Py<PyAny>> {
 
     for line in content.lines() {
         if let Some(v) = line.strip_prefix("input_size=") {
-            input_size = Some(v.parse().map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid input_size"))?);
+            input_size = Some(
+                v.parse()
+                    .map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid input_size"))?,
+            );
         } else if let Some(v) = line.strip_prefix("weights=") {
             let cleaned = v.trim().trim_start_matches('[').trim_end_matches(']');
             let parsed = if cleaned.is_empty() {
@@ -288,14 +322,19 @@ fn load(py: Python<'_>, path: String) -> PyResult<Py<PyAny>> {
             };
             weights = Some(parsed);
         } else if let Some(v) = line.strip_prefix("bias=") {
-            bias = Some(v.parse().map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid bias"))?);
+            bias = Some(
+                v.parse()
+                    .map_err(|_| pyo3::exceptions::PyValueError::new_err("invalid bias"))?,
+            );
         }
     }
 
     let model = LinearRegression {
         model: LinearModel {
-            input_size: input_size.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing input_size"))?,
-            weights: weights.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing weights"))?,
+            input_size: input_size
+                .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing input_size"))?,
+            weights: weights
+                .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing weights"))?,
             bias: bias.ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing bias"))?,
         },
     };
