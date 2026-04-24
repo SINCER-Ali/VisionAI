@@ -389,6 +389,7 @@ fn save_model_to_disk(dir: &Path, model: &StoredModel) -> Result<(), ApiError> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn get_input_size(model: &StoredModel) -> usize {
     match model {
         StoredModel::Linear { input_size, .. } => *input_size,

@@ -241,6 +241,7 @@ fn gradient_descent_default() {
 
 // Helper : tente d'entrainer un MLP plusieurs fois (l'init aleatoire
 // peut mener a des minima locaux). Retourne true si le test passe.
+#[allow(clippy::too_many_arguments)]
 fn train_and_check(
     arch: &[usize],
     inputs: &[Vector],
