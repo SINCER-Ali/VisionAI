@@ -1,4 +1,3 @@
-// Dans core_lib/src/math/mod.rs
-
+pub mod activations;
 pub mod matrix;
 pub mod vector;

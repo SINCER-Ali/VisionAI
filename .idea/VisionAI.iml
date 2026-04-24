@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <module type="CPP_MODULE" version="4">
+  <component name="FacetManager">
+    <facet type="Python" name="Python facet">
+      <configuration sdkName="Python 3.11 (VisionAI)" />
+    </facet>
+  </component>
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/api_server/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/core_lib/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/python_binding/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/core_lib/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/python_binding/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
