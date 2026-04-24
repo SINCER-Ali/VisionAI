@@ -1,4 +1,4 @@
-use core_lib::math::activations::{self, Activation, relu, sigmoid, softmax, tanh};
+use core_lib::math::activations::{Activation, relu, sigmoid, softmax, tanh};
 use core_lib::math::matrix::Matrix;
 use core_lib::math::vector::Vector;
 use core_lib::models::linear::LinearModel;
