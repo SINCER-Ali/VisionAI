@@ -63,8 +63,7 @@ impl Model for LinearModel {
                 total_loss += error * error;
 
                 for (i, item) in input.iter().enumerate().take(self.input_size) {
-                    self.weights[i] -=
-                        config.learning_rate * 2.0 * error * *item;
+                    self.weights[i] -= config.learning_rate * 2.0 * error * *item;
                 }
                 self.bias -= config.learning_rate * 2.0 * error;
             }
