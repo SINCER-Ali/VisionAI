@@ -2,6 +2,7 @@ use core_lib::math::matrix::Matrix as CoreMatrix;
 use core_lib::math::vector::Vector as CoreVector;
 use core_lib::models::linear::LinearModel;
 use core_lib::models::mlp::MLP;
+use core_lib::models::rbf::{RBFNetwork, RBFConfig};
 use core_lib::models::{Model, TrainConfig};
 use core_lib::optim::gradient_descent::GradientDescentConfig;
 use pyo3::prelude::*;

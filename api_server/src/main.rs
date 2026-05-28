@@ -24,6 +24,7 @@ use walkdir::WalkDir;
 use core_lib::math::vector::Vector as CoreVector;
 use core_lib::models::linear::LinearModel;
 use core_lib::models::mlp::MLP;
+use core_lib::models::rbf::{RBFConfig, RBFNetwork};
 use core_lib::models::{Model, TrainConfig};
 
 #[derive(Clone)]
@@ -31,6 +32,7 @@ struct AppState {
     models: Arc<RwLock<HashMap<String, StoredModel>>>,
     models_dir: PathBuf,
     mlp: Arc<RwLock<Option<MLP>>>,
+    rbf: Arc<RwLock<Option<RBFNetwork>>>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -41,6 +43,18 @@ enum StoredModel {
         input_size: usize,
         weights: Vec<f64>,
         bias: f64,
+        metadata: ModelMetadata,
+    },
+    Rbf {
+        name: String,
+        input_size: usize,
+        output_size: usize,
+        n_centers: usize,
+        sigma: f64,
+        /// Poids sérialisés à plat (row-major)
+        weights_flat: Vec<f64>,
+        /// Centres sérialisés à plat
+        centers_flat: Vec<f64>,
         metadata: ModelMetadata,
     },
 }
@@ -134,6 +148,7 @@ async fn main() {
         models: Arc::new(RwLock::new(loaded_models)),
         models_dir,
         mlp: Arc::new(RwLock::new(mlp)),
+        rbf: Arc::new(RwLock::new(None)),
     };
 
     let app = Router::new()
@@ -163,6 +178,20 @@ fn load_mlp_model() -> Option<MLP> {
             Err(e) => {
                 error!("Erreur chargement poids MLP: {}", e);
             }
+        }
+    }
+    None
+}
+
+fn load_rbf_model() -> Option<RBFNetwork> {
+    let path = "models/rbf_weights.json";
+    if std::path::Path::new(path).exists() {
+        match RBFNetwork::load_json(path) {
+            Ok(rbf) => {
+                info!("RBF chargé depuis {}", path);
+                return Some(rbf);
+            }
+            Err(e) => error!("Erreur chargement RBF: {}", e),
         }
     }
     None
@@ -275,22 +304,39 @@ async fn predict(
             }));
         }
     }
+    if model_name == "rbf" {
+        let rbf_lock = state
+            .rbf
+            .read()
+            .map_err(|_| ApiError::Internal("lock poisoned".into()))?;
+        if let Some(rbf) = rbf_lock.as_ref() {
+            let output = rbf.predict(&input);
+            let classes = ["aucun", "humain", "animal"];
+            let best_idx = output.argmax();
+            let confidence = output.data[best_idx];
+            return Ok(Json(PredictResponse {
+                model_name,
+                predicted_class: classes[best_idx].to_string(),
+                confidence,
+            }));
+        }
+    }
 
     let models = state
-        .models
-        .read()
-        .map_err(|_| ApiError::Internal("lock poisoned".into()))?;
-    let model = models
-        .get(&model_name)
-        .ok_or_else(|| ApiError::NotFound(format!("model '{model_name}' not found")))?;
-    let (class, confidence) = run_prediction(model, &input.data);
+            .models
+            .read()
+            .map_err(|_| ApiError::Internal("lock poisoned".into()))?;
+        let model = models
+            .get(&model_name)
+            .ok_or_else(|| ApiError::NotFound(format!("model '{model_name}' not found")))?;
+        let (class, confidence) = run_prediction(model, &input.data);
 
-    Ok(Json(PredictResponse {
-        model_name,
-        predicted_class: class,
-        confidence,
-    }))
-}
+        Ok(Json(PredictResponse {
+            model_name,
+            predicted_class: class,
+            confidence,
+        }))
+    }
 
 async fn train(
     State(state): State<AppState>,
@@ -363,6 +409,7 @@ fn load_models_from_disk(dir: &Path) -> HashMap<String, StoredModel> {
                 Ok(model) => {
                     let name = match &model {
                         StoredModel::Linear { name, .. } => name.clone(),
+                        StoredModel::Rbf { name, .. } => name.clone(),
                     };
                     models.insert(name, model);
                 }
@@ -381,6 +428,7 @@ fn save_model_to_disk(dir: &Path, model: &StoredModel) -> Result<(), ApiError> {
     }
     let name = match model {
         StoredModel::Linear { name, .. } => name,
+        StoredModel::Rbf { name, .. } => name,
     };
     let path = dir.join(format!("{name}.json"));
     let json = serde_json::to_string_pretty(model)
@@ -393,6 +441,7 @@ fn save_model_to_disk(dir: &Path, model: &StoredModel) -> Result<(), ApiError> {
 fn get_input_size(model: &StoredModel) -> usize {
     match model {
         StoredModel::Linear { input_size, .. } => *input_size,
+        StoredModel::Rbf { input_size, .. } => *input_size,
     }
 }
 
@@ -411,6 +460,33 @@ fn run_prediction(model: &StoredModel, input: &Vec<f64>) -> (String, f64) {
                 ("rien", (1.0 - out.abs()).max(0.0))
             };
             (class.to_string(), confidence)
+        }
+        StoredModel::Rbf {
+            input_size,
+            output_size,
+            n_centers,
+            sigma,
+            weights_flat,
+            centers_flat,
+            ..
+        } => {
+            // Reconstruit le modèle RBF depuis les données sérialisées
+            let mut rbf = RBFNetwork::new(*input_size, *output_size, *n_centers, *sigma);
+            rbf.weights = core_lib::math::matrix::Matrix::from_flat(
+                *output_size,
+                *n_centers + 1,
+                weights_flat.clone(),
+            );
+            rbf.centers = centers_flat
+                .chunks(*input_size)
+                .map(|c| CoreVector::from_vec(c.to_vec()))
+                .collect();
+
+            let x = CoreVector::from_vec(input.clone());
+            let output = rbf.predict(&x);
+            let classes = ["aucun", "humain", "animal"];
+            let best_idx = output.argmax();
+            (classes[best_idx].to_string(), output.data[best_idx])
         }
     }
 }
