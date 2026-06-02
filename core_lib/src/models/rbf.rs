@@ -4,10 +4,6 @@ use crate::math::vector::Vector;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-// ─────────────────────────────────────────────────────────────
-// Config d'entraînement — miroir de GradientDescentConfig (MLP)
-// ─────────────────────────────────────────────────────────────
-
 #[derive(Clone, Debug)]
 pub struct RBFConfig {
     pub lr: f64,
@@ -31,19 +27,11 @@ impl Default for RBFConfig {
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Noyau gaussien : φ(x, c) = exp(−‖x − c‖² / 2σ²)
-// ─────────────────────────────────────────────────────────────
-
 fn gaussian_rbf(x: &Vector, center: &Vector, sigma: f64) -> f64 {
     let diff = x.sub(center);
     let dist_sq = diff.dot(&diff);
     (-dist_sq / (2.0 * sigma * sigma)).exp()
 }
-
-// ─────────────────────────────────────────────────────────────
-// Struct principale
-// ─────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RBFNetwork {
@@ -60,7 +48,6 @@ pub struct RBFNetwork {
 }
 
 impl RBFNetwork {
-    // ── Constructeur ─────────────────────────────────────────
 
     pub fn new(input_size: usize, output_size: usize, n_centers: usize, sigma: f64) -> Self {
         RBFNetwork {
@@ -72,10 +59,8 @@ impl RBFNetwork {
             n_centers,
         }
     }
-
-    // ── Initialisation des centres ────────────────────────────
-
-    /// Échantillonnage aléatoire parmi les données (Fisher-Yates partiel)
+    
+    
     pub fn init_centers_random(&mut self, data: &[Vector]) {
         let mut rng = rand::thread_rng();
         let mut indices: Vec<usize> = (0..data.len()).collect();
@@ -89,9 +74,7 @@ impl RBFNetwork {
             .map(|&i| data[i].clone())
             .collect();
 
-        // Heuristique σ : d_max / √(2k)
         self.sigma = self.auto_sigma();
-        // Réinitialise les poids à zéro après avoir fixé les centres
         self.weights = Matrix::new(self.output_size, self.n_centers + 1);
     }
 
@@ -111,11 +94,7 @@ impl RBFNetwork {
         }
         d_max / (2.0 * self.centers.len() as f64).sqrt()
     }
-
-    // ── Couche cachée ─────────────────────────────────────────
-
-    /// Vecteur d'activations de la couche cachée.
-    /// Taille : n_centers + 1  (data[0] = 1.0 = biais)
+    
     fn hidden_activations(&self, x: &Vector) -> Vector {
         let mut data = vec![1.0]; // biais
         for center in &self.centers {
@@ -124,9 +103,7 @@ impl RBFNetwork {
         Vector::from_vec(data)
     }
 
-    // ── Forward ───────────────────────────────────────────────
 
-    /// Sortie brute (pré-softmax), taille output_size
     fn forward_raw(&self, x: &Vector) -> Vector {
         let phi = self.hidden_activations(x);
         let cols = self.n_centers + 1;
@@ -141,20 +118,15 @@ impl RBFNetwork {
         Vector::from_vec(out_data)
     }
 
-    // ── Predict ───────────────────────────────────────────────
-    // Même signature que MLP::predict : prend &Vector, retourne Vector
-
+ 
     pub fn predict(&self, input: &Vector) -> Vector {
         softmax(&self.forward_raw(input))
     }
 
-    /// Variante régression (sortie brute sans softmax)
     pub fn predict_regression(&self, input: &Vector) -> Vector {
         self.forward_raw(input)
     }
-
-    // ── Train ─────────────────────────────────────────────────
-    // Même signature que MLP::train
+    
 
     pub fn train(&mut self, inputs: &[Vector], targets: &[Vector], cfg: &RBFConfig) {
         assert!(
@@ -171,7 +143,6 @@ impl RBFNetwork {
                 let phi = self.hidden_activations(x);
                 let raw = self.forward_raw(x);
 
-                // delta = prédiction − cible
                 let (delta, loss) = if cfg.regression {
                     let d = raw.sub(target);
                     let l = d.data.iter().map(|e| e * e).sum::<f64>() / d.len as f64;
@@ -185,7 +156,6 @@ impl RBFNetwork {
 
                 total_loss += loss;
 
-                // W[i][j] -= lr * delta[i] * phi[j]
                 for i in 0..self.output_size {
                     for j in 0..cols {
                         self.weights.data[i * cols + j] -=
@@ -203,9 +173,7 @@ impl RBFNetwork {
             }
         }
     }
-
-    // ── Métriques ─────────────────────────────────────────────
-
+    
     pub fn accuracy(&self, inputs: &[Vector], targets: &[Vector]) -> f64 {
         let correct = inputs
             .iter()
@@ -226,9 +194,7 @@ impl RBFNetwork {
             .sum();
         total / (inputs.len() as f64 * self.output_size as f64)
     }
-
-    // ── Persistance — même pattern que LinearModel et MLP ─────
-
+    
     pub fn save_json(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(self)?;
         std::fs::write(path, json)?;
@@ -254,9 +220,6 @@ impl RBFNetwork {
     }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Tests
-// ─────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
@@ -269,7 +232,7 @@ mod tests {
             Vector::from_vec(vec![1.0, 0.0]),
             Vector::from_vec(vec![1.0, 1.0]),
         ];
-        // One-hot : classe 0 = [1,0], classe 1 = [0,1]
+
         let targets = vec![
             Vector::from_vec(vec![1.0, 0.0]),
             Vector::from_vec(vec![0.0, 1.0]),
@@ -316,7 +279,6 @@ mod tests {
         let mut rbf = RBFNetwork::new(2, 2, 4, 1.0);
         rbf.init_centers_random(&inputs);
 
-        // Loss initiale : on mesure l'accuracy avant (doit être mauvaise)
         let acc_before = rbf.accuracy(&inputs, &targets);
 
         let cfg = RBFConfig {
@@ -351,7 +313,6 @@ mod tests {
         rbf.save_json(&path).unwrap();
         let loaded = RBFNetwork::load_json(&path).unwrap();
 
-        // Comparaison avec epsilon au lieu de == (précision f64 JSON)
         assert_eq!(rbf.weights.data.len(), loaded.weights.data.len());
         for (a, b) in rbf.weights.data.iter().zip(loaded.weights.data.iter()) {
             assert!(
