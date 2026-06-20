@@ -24,7 +24,7 @@ use walkdir::WalkDir;
 use core_lib::math::vector::Vector as CoreVector;
 use core_lib::models::linear::LinearModel;
 use core_lib::models::mlp::MLP;
-use core_lib::models::rbf::{RBFConfig, RBFNetwork};
+use core_lib::models::rbf::RBFNetwork;
 use core_lib::models::{Model, TrainConfig};
 
 #[derive(Clone)]
@@ -144,11 +144,18 @@ async fn main() {
         info!("No MLP model found");
     }
 
+    let rbf = load_rbf_model();
+    if rbf.is_some() {
+        info!("RBF model loaded successfully");
+    } else {
+        info!("No RBF model found");
+    }
+
     let state = AppState {
         models: Arc::new(RwLock::new(loaded_models)),
         models_dir,
         mlp: Arc::new(RwLock::new(mlp)),
-        rbf: Arc::new(RwLock::new(None)),
+        rbf: Arc::new(RwLock::new(rbf)),
     };
 
     let app = Router::new()

@@ -171,6 +171,71 @@ impl LinearRegression {
 }
 
 #[pyclass]
+struct PyRBF {
+    model: RBFNetwork,
+}
+
+#[pymethods]
+impl PyRBF {
+    #[new]
+    #[pyo3(signature = (input_size, output_size, n_centers=10, sigma=1.0))]
+    fn new(input_size: usize, output_size: usize, n_centers: usize, sigma: f64) -> Self {
+        Self {
+            model: RBFNetwork::new(input_size, output_size, n_centers, sigma),
+        }
+    }
+
+    fn init_centers_random(&mut self, data: Vec<Vec<f64>>) {
+        let vecs: Vec<CoreVector> = data.into_iter().map(CoreVector::from_vec).collect();
+        self.model.init_centers_random(&vecs);
+    }
+
+    fn train(
+        &mut self,
+        inputs: Vec<Vec<f64>>,
+        targets: Vec<Vec<f64>>,
+        lr: f64,
+        epochs: usize,
+        regression: bool,
+    ) {
+        let inputs: Vec<CoreVector> = inputs.into_iter().map(CoreVector::from_vec).collect();
+        let targets: Vec<CoreVector> = targets.into_iter().map(CoreVector::from_vec).collect();
+        let cfg = RBFConfig {
+            lr,
+            epochs,
+            n_centers: self.model.n_centers,
+            sigma: self.model.sigma,
+            regression,
+        };
+        self.model.train(&inputs, &targets, &cfg);
+    }
+
+    fn predict(&self, input: Vec<f64>) -> Vec<f64> {
+        let v = CoreVector::from_vec(input);
+        self.model.predict(&v).data
+    }
+
+    fn accuracy(&self, inputs: Vec<Vec<f64>>, targets: Vec<Vec<f64>>) -> f64 {
+        let inputs: Vec<CoreVector> = inputs.into_iter().map(CoreVector::from_vec).collect();
+        let targets: Vec<CoreVector> = targets.into_iter().map(CoreVector::from_vec).collect();
+        self.model.accuracy(&inputs, &targets)
+    }
+
+    fn save_json(&self, path: String) -> PyResult<()> {
+        self.model
+            .save_json(&path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    #[staticmethod]
+    fn load_json(path: String) -> PyResult<PyRBF> {
+        let model = RBFNetwork::load_json(&path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(PyRBF { model })
+    }
+}
+
+#[pyclass]
 struct PyMLP {
     model: MLP,
 }
@@ -349,6 +414,7 @@ fn vision_ai(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMatrix>()?;
     m.add_class::<LinearRegression>()?;
     m.add_class::<PyMLP>()?;
+    m.add_class::<PyRBF>()?;
     m.add_function(wrap_pyfunction!(create_model, m)?)?;
     m.add_function(wrap_pyfunction!(train, m)?)?;
     m.add_function(wrap_pyfunction!(predict, m)?)?;
