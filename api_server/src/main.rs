@@ -38,11 +38,13 @@ struct AppState {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum StoredModel {
+    /// Modèle linéaire one-vs-rest : 3 modèles indépendants (aucun / humain / animal).
+    /// weights_per_class[i] et biases[i] correspondent à la classe i.
     Linear {
         name: String,
         input_size: usize,
-        weights: Vec<f64>,
-        bias: f64,
+        weights_per_class: Vec<Vec<f64>>,
+        biases: Vec<f64>,
         metadata: ModelMetadata,
     },
     Rbf {
@@ -356,25 +358,50 @@ async fn train(
         return Err(ApiError::BadRequest("lr must be > 0".into()));
     }
 
-    let input_size = req.input_size.unwrap_or(128);
-    let mut model = LinearModel::new(input_size);
-    let synthetic_inputs = vec![vec![0.0; input_size], vec![1.0; input_size]];
-    let synthetic_targets = vec![vec![0.0], vec![1.0]];
+    let input_size = req.input_size.unwrap_or(12288);
     let cfg = TrainConfig {
         learning_rate: req.lr,
         epochs: req.epochs,
     };
-    model.train(&synthetic_inputs, &synthetic_targets, &cfg);
+
+    // One-vs-rest : un modèle linéaire par classe (aucun=0, humain=1, animal=2)
+    let class_names = ["aucun", "humain", "animal"];
+    let mut weights_per_class: Vec<Vec<f64>> = Vec::new();
+    let mut biases: Vec<f64> = Vec::new();
+
+    // Données synthétiques équilibrées par classe (à remplacer par vraies données)
+    let synthetic_inputs: Vec<Vec<f64>> = (0..3)
+        .map(|cls| {
+            let mut v = vec![0.0; input_size];
+            if input_size > cls {
+                v[cls] = 1.0;
+            }
+            v
+        })
+        .collect();
+
+    for cls_idx in 0..3 {
+        let mut m = LinearModel::new(input_size);
+        let targets: Vec<Vec<f64>> = (0..3)
+            .map(|i| vec![if i == cls_idx { 1.0 } else { 0.0 }])
+            .collect();
+        m.train(&synthetic_inputs, &targets, &cfg);
+        weights_per_class.push(m.weights.clone());
+        biases.push(m.bias);
+    }
 
     let stored = StoredModel::Linear {
         name: req.model_name.clone(),
         input_size,
-        weights: model.weights.clone(),
-        bias: model.bias,
+        weights_per_class,
+        biases,
         metadata: ModelMetadata {
             name: req.model_name.clone(),
             version: "1.0.0".into(),
-            description: Some("Trained from API server".into()),
+            description: Some(format!(
+                "OvR linear — classes: {}",
+                class_names.join(", ")
+            )),
         },
     };
 
@@ -395,7 +422,7 @@ async fn train(
         dataset_path: req.dataset_path,
         metrics: TrainMetrics {
             final_loss: 0.0,
-            accuracy: 0.702,
+            accuracy: 0.0,
         },
     }))
 }
@@ -452,21 +479,42 @@ fn get_input_size(model: &StoredModel) -> usize {
     }
 }
 
-fn run_prediction(model: &StoredModel, input: &Vec<f64>) -> (String, f64) {
+fn run_prediction(model: &StoredModel, input: &[f64]) -> (String, f64) {
     match model {
-        StoredModel::Linear { weights, bias, .. } => {
-            let mut m = LinearModel::new(weights.len());
-            m.weights = weights.clone();
-            m.bias = *bias;
-            let out = m.predict(input)[0];
-            let (class, confidence) = if out >= 0.66 {
-                ("animal", out.min(1.0))
-            } else if out >= 0.33 {
-                ("humain", out.min(1.0))
-            } else {
-                ("rien", (1.0 - out.abs()).max(0.0))
-            };
-            (class.to_string(), confidence)
+        StoredModel::Linear {
+            weights_per_class,
+            biases,
+            input_size,
+            ..
+        } => {
+            let classes = ["aucun", "humain", "animal"];
+
+            // One-vs-rest : on calcule un score par classe et on prend l'argmax
+            let scores: Vec<f64> = weights_per_class
+                .iter()
+                .zip(biases.iter())
+                .map(|(weights, bias)| {
+                    let mut m = LinearModel::new(*input_size);
+                    m.weights = weights.clone();
+                    m.bias = *bias;
+                    m.predict(&input.to_vec())[0]
+                })
+                .collect();
+
+            let best_idx = scores
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+
+            // Softmax sur les scores pour obtenir une confiance normalisée
+            let max_score = scores.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+            let exps: Vec<f64> = scores.iter().map(|s| (s - max_score).exp()).collect();
+            let sum_exp: f64 = exps.iter().sum();
+            let confidence = if sum_exp > 0.0 { exps[best_idx] / sum_exp } else { 1.0 / 3.0 };
+
+            (classes[best_idx].to_string(), confidence)
         }
         StoredModel::Rbf {
             input_size,
@@ -489,7 +537,7 @@ fn run_prediction(model: &StoredModel, input: &Vec<f64>) -> (String, f64) {
                 .map(|c| CoreVector::from_vec(c.to_vec()))
                 .collect();
 
-            let x = CoreVector::from_vec(input.clone());
+            let x = CoreVector::from_vec(input.to_vec());
             let output = rbf.predict(&x);
             let classes = ["aucun", "humain", "animal"];
             let best_idx = output.argmax();
