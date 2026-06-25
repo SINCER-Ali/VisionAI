@@ -2,6 +2,8 @@ use core_lib::math::matrix::Matrix as CoreMatrix;
 use core_lib::math::vector::Vector as CoreVector;
 use core_lib::models::linear::LinearModel;
 use core_lib::models::mlp::MLP;
+use core_lib::models::rbf::RBF;
+use core_lib::models::svm::{KernelType, SVM};
 use core_lib::models::{Model, TrainConfig};
 use core_lib::optim::gradient_descent::GradientDescentConfig;
 use pyo3::prelude::*;
@@ -166,6 +168,143 @@ impl LinearRegression {
         };
         self.model.train(&x, &y, &cfg);
         Ok(())
+    }
+}
+
+#[pyclass]
+struct PyRBF {
+    model: RBF,
+}
+
+#[pymethods]
+impl PyRBF {
+    /// Signature historique conservée (input_size, output_size, n_centers, sigma)
+    /// pour rester compatible avec les notebooks. En interne on délègue au RBF
+    /// du projet : `sigma` est converti en `gamma` (gamma = 1 / (2*sigma^2)),
+    /// et `input_size` est déduit automatiquement des données à l'entraînement.
+    #[new]
+    #[pyo3(signature = (input_size, output_size, n_centers=10, sigma=1.0))]
+    fn new(input_size: usize, output_size: usize, n_centers: usize, sigma: f64) -> Self {
+        let _ = input_size; // déduit des données dans train()
+        let gamma = if sigma > 0.0 { 1.0 / (2.0 * sigma * sigma) } else { 1.0 };
+        Self {
+            model: RBF::new(n_centers, gamma, output_size),
+        }
+    }
+
+    /// Conservé pour compatibilité : ce RBF initialise ses centres
+    /// automatiquement au début de `train()`, donc cet appel est sans effet.
+    fn init_centers_random(&mut self, _data: Vec<Vec<f64>>) {}
+
+    #[pyo3(signature = (inputs, targets, lr, epochs, regression=false))]
+    fn train(
+        &mut self,
+        inputs: Vec<Vec<f64>>,
+        targets: Vec<Vec<f64>>,
+        lr: f64,
+        epochs: usize,
+        regression: bool,
+    ) {
+        let _ = regression; // ce RBF fait de la classification (softmax)
+        let inputs: Vec<CoreVector> = inputs.into_iter().map(CoreVector::from_vec).collect();
+        let targets: Vec<CoreVector> = targets.into_iter().map(CoreVector::from_vec).collect();
+        let cfg = GradientDescentConfig { lr, epochs };
+        self.model.train(&inputs, &targets, cfg);
+    }
+
+    fn predict(&self, input: Vec<f64>) -> Vec<f64> {
+        let v = CoreVector::from_vec(input);
+        self.model.predict(&v).data
+    }
+
+    fn accuracy(&self, inputs: Vec<Vec<f64>>, targets: Vec<Vec<f64>>) -> f64 {
+        let inputs: Vec<CoreVector> = inputs.into_iter().map(CoreVector::from_vec).collect();
+        let targets: Vec<CoreVector> = targets.into_iter().map(CoreVector::from_vec).collect();
+        if inputs.is_empty() {
+            return 0.0;
+        }
+        let correct = inputs
+            .iter()
+            .zip(targets.iter())
+            .filter(|(x, t)| self.model.predict(x).argmax() == t.argmax())
+            .count();
+        correct as f64 / inputs.len() as f64
+    }
+
+    fn save_json(&self, path: String) -> PyResult<()> {
+        self.model
+            .save_json(&path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    #[staticmethod]
+    fn load_json(path: String) -> PyResult<PyRBF> {
+        let model = RBF::load_json(&path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(PyRBF { model })
+    }
+}
+
+#[pyclass]
+struct PySVM {
+    model: SVM,
+}
+
+#[pymethods]
+impl PySVM {
+    /// kernel : "linear" | "rbf" | "poly"
+    #[new]
+    #[pyo3(signature = (c=1.0, kernel="linear", gamma=1.0, degree=3, coef0=1.0))]
+    fn new(c: f64, kernel: &str, gamma: f64, degree: usize, coef0: f64) -> PyResult<Self> {
+        let model = match kernel {
+            "linear" => SVM::new_linear(c),
+            "rbf" => SVM::new_kernel(c, KernelType::RBF { gamma }),
+            "poly" | "polynomial" => SVM::new_kernel(c, KernelType::Polynomial { degree, coef0 }),
+            other => {
+                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "kernel inconnu '{other}' (attendu : linear | rbf | poly)"
+                )));
+            }
+        };
+        Ok(Self { model })
+    }
+
+    fn train(&mut self, inputs: Vec<Vec<f64>>, targets: Vec<Vec<f64>>, lr: f64, epochs: usize) {
+        let inputs: Vec<CoreVector> = inputs.into_iter().map(CoreVector::from_vec).collect();
+        let targets: Vec<CoreVector> = targets.into_iter().map(CoreVector::from_vec).collect();
+        self.model.train(&inputs, &targets, lr, epochs);
+    }
+
+    fn predict(&self, input: Vec<f64>) -> Vec<f64> {
+        let v = CoreVector::from_vec(input);
+        self.model.predict(&v).data
+    }
+
+    fn accuracy(&self, inputs: Vec<Vec<f64>>, targets: Vec<Vec<f64>>) -> f64 {
+        let inputs: Vec<CoreVector> = inputs.into_iter().map(CoreVector::from_vec).collect();
+        let targets: Vec<CoreVector> = targets.into_iter().map(CoreVector::from_vec).collect();
+        if inputs.is_empty() {
+            return 0.0;
+        }
+        let correct = inputs
+            .iter()
+            .zip(targets.iter())
+            .filter(|(x, t)| self.model.predict(x).argmax() == t.argmax())
+            .count();
+        correct as f64 / inputs.len() as f64
+    }
+
+    fn save_json(&self, path: String) -> PyResult<()> {
+        self.model
+            .save_json(&path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    #[staticmethod]
+    fn load_json(path: String) -> PyResult<PySVM> {
+        let model = SVM::load_json(&path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+        Ok(PySVM { model })
     }
 }
 
@@ -348,6 +487,8 @@ fn vision_ai(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMatrix>()?;
     m.add_class::<LinearRegression>()?;
     m.add_class::<PyMLP>()?;
+    m.add_class::<PyRBF>()?;
+    m.add_class::<PySVM>()?;
     m.add_function(wrap_pyfunction!(create_model, m)?)?;
     m.add_function(wrap_pyfunction!(train, m)?)?;
     m.add_function(wrap_pyfunction!(predict, m)?)?;

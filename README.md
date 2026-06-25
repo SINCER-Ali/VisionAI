@@ -19,6 +19,22 @@ Le projet met l’accent sur :
 
 ---
 
+## 🤖 Modèles implémentés
+
+| Modèle | Description | Entraînement |
+|---|---|---|
+| **Linéaire** | régression linéaire (one-vs-rest pour la classification) | descente de gradient |
+| **MLP** | perceptron multi-couches (ReLU + softmax) | rétropropagation |
+| **RBF** | réseau à fonctions de base radiale (noyau gaussien) | moindres carrés régularisés + raffinement gradient |
+| **SVM** | machine à vecteurs de support, noyaux `linéaire` / `RBF` / `polynomial` | hinge loss (SGD) / SMO |
+
+Optimiseurs disponibles : **descente de gradient**, **SGD momentum (+ Nesterov)**, **Adam**.
+Métriques : accuracy, matrice de confusion, précision, rappel, F1 (+ macro), MSE, MAE, R², k-fold.
+
+3 classes cibles : **aucun / humain / animal** (images 64×64×3 = 12288 entrées).
+
+---
+
 ## 🧱 Architecture du projet
 
 Le projet est organisé sous forme de **workspace Rust**, composé de plusieurs crates indépendantes mais interconnectées.
@@ -41,10 +57,16 @@ VisionAI/
 │       │   ├── mod.rs
 │       │   ├── linear.rs   # Modèle linéaire
 │       │   ├── mlp.rs      # Perceptron Multi-Couches
-│       │   └── rbf.rs      # Réseau à fonctions de base radiale
+│       │   ├── rbf.rs      # Réseau à fonctions de base radiale
+│       │   └── svm.rs      # Machine à vecteurs de support (linéaire + noyau)
+│       ├── metrics/        # Métriques (accuracy, précision, rappel, F1, MSE, MAE, R²)
+│       │   └── mod.rs
 │       └── optim/          # Algorithmes d’optimisation
 │           ├── mod.rs
-│           └── gradient_descent.rs
+│           ├── gradient_descent.rs
+│           ├── sgd_momentum.rs    # SGD avec momentum (+ Nesterov)
+│           ├── adam.rs            # Optimiseur Adam
+│           └── optimizer.rs       # Trait commun Optimizer
 │
 ├── python_binding/         # Wrapper Python (PyO3)
 │   ├── Cargo.toml
