@@ -18,9 +18,7 @@ impl KernelType {
                 let diff = a.sub(b);
                 (-gamma * diff.dot(&diff)).exp()
             }
-            KernelType::Polynomial { degree, coef0 } => {
-                (a.dot(b) + coef0).powi(*degree as i32)
-            }
+            KernelType::Polynomial { degree, coef0 } => (a.dot(b) + coef0).powi(*degree as i32),
         }
     }
 }
@@ -36,7 +34,11 @@ struct BinaryLinearSVM {
 
 impl BinaryLinearSVM {
     fn new(input_size: usize, c: f64) -> Self {
-        BinaryLinearSVM { weights: Vector::new(input_size), bias: 0.0, c }
+        BinaryLinearSVM {
+            weights: Vector::new(input_size),
+            bias: 0.0,
+            c,
+        }
     }
 
     // labels : +1.0 ou -1.0
@@ -93,7 +95,8 @@ impl BinaryKernelSVM {
     fn decision_raw(&self, x: &Vector) -> f64 {
         let mut result = self.bias;
         for i in 0..self.alphas.len() {
-            result += self.alphas[i] * self.sv_labels[i]
+            result += self.alphas[i]
+                * self.sv_labels[i]
                 * self.kernel.compute(&self.support_vectors[i], x);
         }
         result
@@ -106,7 +109,8 @@ impl BinaryKernelSVM {
         bias: f64,
         i: usize,
     ) -> f64 {
-        let sum: f64 = alphas.iter()
+        let sum: f64 = alphas
+            .iter()
             .zip(labels.iter())
             .enumerate()
             .map(|(j, (&a, &y))| a * y * k[j][i])
@@ -140,7 +144,9 @@ impl BinaryKernelSVM {
             let candidates: Vec<usize> = if examine_all {
                 (0..n).collect()
             } else {
-                (0..n).filter(|&i| alphas[i] > eps && alphas[i] < self.c - eps).collect()
+                (0..n)
+                    .filter(|&i| alphas[i] > eps && alphas[i] < self.c - eps)
+                    .collect()
             };
 
             for &i in &candidates {
@@ -152,10 +158,16 @@ impl BinaryKernelSVM {
                     let mut best_j = (i + 1) % n;
                     let mut best_diff = 0.0f64;
                     for j in 0..n {
-                        if j == i { continue; }
-                        let ej = Self::decision_from_matrix(&alphas, labels, &k, bias, j) - labels[j];
+                        if j == i {
+                            continue;
+                        }
+                        let ej =
+                            Self::decision_from_matrix(&alphas, labels, &k, bias, j) - labels[j];
                         let diff = (ei - ej).abs();
-                        if diff > best_diff { best_diff = diff; best_j = j; }
+                        if diff > best_diff {
+                            best_diff = diff;
+                            best_j = j;
+                        }
                     }
 
                     let j = best_j;
@@ -171,10 +183,14 @@ impl BinaryKernelSVM {
                         ((-d).max(0.0), (self.c - d).min(self.c))
                     };
 
-                    if (l - h).abs() < eps { continue; }
+                    if (l - h).abs() < eps {
+                        continue;
+                    }
 
                     let eta = 2.0 * k[i][j] - k[i][i] - k[j][j];
-                    if eta >= 0.0 { continue; }
+                    if eta >= 0.0 {
+                        continue;
+                    }
 
                     alphas[j] -= labels[j] * (ei - ej) / eta;
                     alphas[j] = alphas[j].max(l).min(h);
@@ -185,25 +201,36 @@ impl BinaryKernelSVM {
 
                     alphas[i] += labels[i] * labels[j] * (alpha_j_old - alphas[j]);
 
-                    let b1 = bias - ei
+                    let b1 = bias
+                        - ei
                         - labels[i] * (alphas[i] - alpha_i_old) * k[i][i]
                         - labels[j] * (alphas[j] - alpha_j_old) * k[i][j];
-                    let b2 = bias - ej
+                    let b2 = bias
+                        - ej
                         - labels[i] * (alphas[i] - alpha_i_old) * k[i][j]
                         - labels[j] * (alphas[j] - alpha_j_old) * k[j][j];
 
-                    bias = if alphas[i] > eps && alphas[i] < self.c - eps { b1 }
-                           else if alphas[j] > eps && alphas[j] < self.c - eps { b2 }
-                           else { (b1 + b2) / 2.0 };
+                    bias = if alphas[i] > eps && alphas[i] < self.c - eps {
+                        b1
+                    } else if alphas[j] > eps && alphas[j] < self.c - eps {
+                        b2
+                    } else {
+                        (b1 + b2) / 2.0
+                    };
 
                     changed += 1;
                 }
             }
 
             iter += 1;
-            if iter >= max_iter { break; }
-            if examine_all { examine_all = false; }
-            else if changed == 0 { examine_all = true; }
+            if iter >= max_iter {
+                break;
+            }
+            if examine_all {
+                examine_all = false;
+            } else if changed == 0 {
+                examine_all = true;
+            }
         }
 
         self.bias = bias;
@@ -258,9 +285,15 @@ impl SVM {
     pub fn predict(&self, input: &Vector) -> Vector {
         assert!(self.n_classes > 0, "SVM non entraine");
         let scores: Vec<f64> = if self.use_kernel {
-            self.kernel_classifiers.iter().map(|clf| clf.decision_raw(input)).collect()
+            self.kernel_classifiers
+                .iter()
+                .map(|clf| clf.decision_raw(input))
+                .collect()
         } else {
-            self.linear_classifiers.iter().map(|clf| clf.decision(input)).collect()
+            self.linear_classifiers
+                .iter()
+                .map(|clf| clf.decision(input))
+                .collect()
         };
         softmax(&Vector::from_vec(scores))
     }
@@ -275,23 +308,29 @@ impl SVM {
         let input_size = inputs[0].len;
 
         if self.use_kernel {
-            self.kernel_classifiers = (0..n_classes).map(|cls| {
-                let labels: Vec<f64> = targets.iter()
-                    .map(|t| if t.argmax() == cls { 1.0 } else { -1.0 })
-                    .collect();
-                let mut clf = BinaryKernelSVM::new(self.c, self.kernel.clone());
-                clf.train(inputs, &labels, epochs.max(50));
-                clf
-            }).collect();
+            self.kernel_classifiers = (0..n_classes)
+                .map(|cls| {
+                    let labels: Vec<f64> = targets
+                        .iter()
+                        .map(|t| if t.argmax() == cls { 1.0 } else { -1.0 })
+                        .collect();
+                    let mut clf = BinaryKernelSVM::new(self.c, self.kernel.clone());
+                    clf.train(inputs, &labels, epochs.max(50));
+                    clf
+                })
+                .collect();
         } else {
-            self.linear_classifiers = (0..n_classes).map(|cls| {
-                let labels: Vec<f64> = targets.iter()
-                    .map(|t| if t.argmax() == cls { 1.0 } else { -1.0 })
-                    .collect();
-                let mut clf = BinaryLinearSVM::new(input_size, self.c);
-                clf.train(inputs, &labels, lr, epochs);
-                clf
-            }).collect();
+            self.linear_classifiers = (0..n_classes)
+                .map(|cls| {
+                    let labels: Vec<f64> = targets
+                        .iter()
+                        .map(|t| if t.argmax() == cls { 1.0 } else { -1.0 })
+                        .collect();
+                    let mut clf = BinaryLinearSVM::new(input_size, self.c);
+                    clf.train(inputs, &labels, lr, epochs);
+                    clf
+                })
+                .collect();
         }
     }
 
@@ -380,8 +419,13 @@ mod tests {
         for _ in 0..5 {
             let mut svm = SVM::new_linear(10.0);
             svm.train(&inputs, &targets, 0.05, 2000);
-            if inputs.iter().zip(expected.iter()).all(|(x, &e)| svm.predict(x).argmax() == e) {
-                ok = true; break;
+            if inputs
+                .iter()
+                .zip(expected.iter())
+                .all(|(x, &e)| svm.predict(x).argmax() == e)
+            {
+                ok = true;
+                break;
             }
         }
         assert!(ok, "SVM lineaire doit converger sur AND");
@@ -406,8 +450,13 @@ mod tests {
         for _ in 0..5 {
             let mut svm = SVM::new_linear(10.0);
             svm.train(&inputs, &targets, 0.05, 2000);
-            if inputs.iter().zip(expected.iter()).all(|(x, &e)| svm.predict(x).argmax() == e) {
-                ok = true; break;
+            if inputs
+                .iter()
+                .zip(expected.iter())
+                .all(|(x, &e)| svm.predict(x).argmax() == e)
+            {
+                ok = true;
+                break;
             }
         }
         assert!(ok, "SVM lineaire doit converger sur OR");
@@ -421,8 +470,13 @@ mod tests {
         for _ in 0..5 {
             let mut svm = SVM::new_kernel(5.0, KernelType::RBF { gamma: 1.0 });
             svm.train(&inputs, &targets, 0.0, 200);
-            if inputs.iter().zip(expected.iter()).all(|(x, &e)| svm.predict(x).argmax() == e) {
-                ok = true; break;
+            if inputs
+                .iter()
+                .zip(expected.iter())
+                .all(|(x, &e)| svm.predict(x).argmax() == e)
+            {
+                ok = true;
+                break;
             }
         }
         assert!(ok, "SVM noyau RBF doit converger sur XOR");

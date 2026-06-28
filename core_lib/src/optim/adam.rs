@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use super::optimizer::Optimizer;
+use std::collections::HashMap;
 
 // Adam (Adaptive Moment Estimation)
 // m_t = b1 * m_{t-1} + (1-b1) * grad
@@ -86,7 +86,9 @@ mod tests {
     #[test]
     fn adam_reset_clears_state() {
         let mut adam = Adam::new(0.001);
-        for _ in 0..5 { adam.update(0, 1.0, 0.5); }
+        for _ in 0..5 {
+            adam.update(0, 1.0, 0.5);
+        }
         adam.reset();
         let v_after_reset = adam.update(0, 1.0, 0.5);
         let mut adam2 = Adam::new(0.001);

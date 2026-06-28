@@ -156,7 +156,11 @@ impl MLP {
                 for (i, layer) in self.layers.iter().enumerate() {
                     let z = layer.forward(activations.last().unwrap());
                     zs.push(z.clone());
-                    let a = if i == self.layers.len() - 1 { softmax(&z) } else { self.hidden_activation.apply(&z) };
+                    let a = if i == self.layers.len() - 1 {
+                        softmax(&z)
+                    } else {
+                        self.hidden_activation.apply(&z)
+                    };
                     activations.push(a);
                 }
                 let output = activations.last().unwrap();
@@ -169,16 +173,22 @@ impl MLP {
                         for j in 0..in_size {
                             let idx = base + i * (in_size + 1) + j;
                             let grad = delta.data[i] * a_prev.data[j];
-                            self.layers[l].weights[i].data[j] = optimizer.update(idx, self.layers[l].weights[i].data[j], grad);
+                            self.layers[l].weights[i].data[j] =
+                                optimizer.update(idx, self.layers[l].weights[i].data[j], grad);
                         }
                         let bias_idx = base + i * (in_size + 1) + in_size;
-                        self.layers[l].biases.data[i] = optimizer.update(bias_idx, self.layers[l].biases.data[i], delta.data[i]);
+                        self.layers[l].biases.data[i] = optimizer.update(
+                            bias_idx,
+                            self.layers[l].biases.data[i],
+                            delta.data[i],
+                        );
                     }
                     if l > 0 {
                         let mut new_delta = Vector::new(in_size);
                         for j in 0..in_size {
                             for i in 0..self.layers[l].output_size {
-                                new_delta.data[j] += self.layers[l].weights[i].data[j] * delta.data[i];
+                                new_delta.data[j] +=
+                                    self.layers[l].weights[i].data[j] * delta.data[i];
                             }
                         }
                         let rd = self.hidden_activation.derivative(&zs[l - 1]);

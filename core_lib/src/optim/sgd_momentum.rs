@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use super::optimizer::Optimizer;
+use std::collections::HashMap;
 
 // SGD avec momentum
 // v_t = momentum * v_{t-1} - lr * grad
@@ -14,7 +14,12 @@ pub struct SGDMomentum {
 
 impl SGDMomentum {
     pub fn new(lr: f64, momentum: f64) -> Self {
-        SGDMomentum { lr, momentum, nesterov: false, velocities: HashMap::new() }
+        SGDMomentum {
+            lr,
+            momentum,
+            nesterov: false,
+            velocities: HashMap::new(),
+        }
     }
 
     pub fn with_nesterov(mut self) -> Self {
@@ -56,7 +61,9 @@ mod tests {
     fn sgd_momentum_accumulates_velocity() {
         let mut opt = SGDMomentum::new(0.1, 0.9);
         let mut v = 1.0f64;
-        for _ in 0..5 { v = opt.update(0, v, 0.1); }
+        for _ in 0..5 {
+            v = opt.update(0, v, 0.1);
+        }
         let drop_5 = 1.0 - v;
         let mut opt2 = SGDMomentum::new(0.1, 0.9);
         let drop_1 = 1.0 - opt2.update(0, 1.0, 0.1);

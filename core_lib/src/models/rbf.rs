@@ -46,7 +46,9 @@ impl RBF {
 
     // Activations de la couche cachee pour une entree x
     pub fn compute_activations(&self, x: &Vector) -> Vector {
-        let data: Vec<f64> = self.centers.iter()
+        let data: Vec<f64> = self
+            .centers
+            .iter()
             .map(|c| Self::rbf_kernel(x, c, self.gamma))
             .collect();
         Vector::from_vec(data)
@@ -62,7 +64,10 @@ impl RBF {
             let j = rng.gen_range(0..=i);
             indices.swap(i, j);
         }
-        indices[..k].iter().map(|&idx| inputs[idx].clone()).collect()
+        indices[..k]
+            .iter()
+            .map(|&idx| inputs[idx].clone())
+            .collect()
     }
 
     // Resout W = (Phi^T Phi + lambda I)^-1 * Phi^T Y via Gauss-Jordan avec pivot partiel
@@ -73,27 +78,25 @@ impl RBF {
         n_outputs: usize,
         lambda: f64,
     ) -> (Vec<Vector>, Vector) {
-        let n = phi.len();
-
         // Phi^T Phi
         let mut ptp = vec![vec![0.0f64; n_centers]; n_centers];
-        for k in 0..n {
+        for phi_row in phi {
             for i in 0..n_centers {
                 for j in 0..n_centers {
-                    ptp[i][j] += phi[k][i] * phi[k][j];
+                    ptp[i][j] += phi_row[i] * phi_row[j];
                 }
             }
         }
-        for i in 0..n_centers {
-            ptp[i][i] += lambda;
+        for (i, row) in ptp.iter_mut().enumerate() {
+            row[i] += lambda;
         }
 
         // Phi^T Y
         let mut pty = vec![vec![0.0f64; n_outputs]; n_centers];
-        for k in 0..n {
-            for i in 0..n_centers {
-                for j in 0..n_outputs {
-                    pty[i][j] += phi[k][i] * targets[k].data[j];
+        for (phi_row, target) in phi.iter().zip(targets.iter()) {
+            for (phi_val, pty_row) in phi_row.iter().zip(pty.iter_mut()) {
+                for (pty_val, td) in pty_row.iter_mut().zip(target.data.iter()) {
+                    *pty_val += phi_val * td;
                 }
             }
         }
@@ -103,8 +106,8 @@ impl RBF {
         let mut aug: Vec<Vec<f64>> = (0..n_centers)
             .map(|i| {
                 let mut row = vec![0.0f64; w];
-                for j in 0..n_centers { row[j] = ptp[i][j]; }
-                for j in 0..n_outputs { row[n_centers + j] = pty[i][j]; }
+                row[..n_centers].copy_from_slice(&ptp[i]);
+                row[n_centers..].copy_from_slice(&pty[i]);
                 row
             })
             .collect();
@@ -112,24 +115,32 @@ impl RBF {
         // Elimination de Gauss-Jordan
         for col in 0..n_centers {
             let (mut max_row, mut max_val) = (col, aug[col][col].abs());
-            for row in (col + 1)..n_centers {
-                if aug[row][col].abs() > max_val {
-                    max_val = aug[row][col].abs();
-                    max_row = row;
+            for (row_idx, aug_row) in aug.iter().enumerate().skip(col + 1) {
+                if aug_row[col].abs() > max_val {
+                    max_val = aug_row[col].abs();
+                    max_row = row_idx;
                 }
             }
             aug.swap(col, max_row);
             let pivot = aug[col][col];
-            if pivot.abs() < 1e-14 { continue; }
+            if pivot.abs() < 1e-14 {
+                continue;
+            }
             let inv = 1.0 / pivot;
-            for j in 0..w { aug[col][j] *= inv; }
-            for row in 0..n_centers {
-                if row == col { continue; }
-                let f = aug[row][col];
-                if f.abs() < 1e-14 { continue; }
-                for j in 0..w {
-                    let sub = f * aug[col][j];
-                    aug[row][j] -= sub;
+            for v in aug[col].iter_mut() {
+                *v *= inv;
+            }
+            let pivot_row = aug[col].clone();
+            for (row, aug_row) in aug.iter_mut().enumerate() {
+                if row == col {
+                    continue;
+                }
+                let f = aug_row[col];
+                if f.abs() < 1e-14 {
+                    continue;
+                }
+                for (v, &p) in aug_row.iter_mut().zip(pivot_row.iter()) {
+                    *v -= f * p;
                 }
             }
         }
@@ -168,8 +179,14 @@ impl RBF {
         self.biases = Vector::new(n_outputs);
         self.centers = Self::init_centers_random(inputs, self.n_centers);
         self.n_centers = self.centers.len();
-        let phi: Vec<Vec<f64>> = inputs.iter()
-            .map(|x| self.centers.iter().map(|c| Self::rbf_kernel(x, c, self.gamma)).collect())
+        let phi: Vec<Vec<f64>> = inputs
+            .iter()
+            .map(|x| {
+                self.centers
+                    .iter()
+                    .map(|c| Self::rbf_kernel(x, c, self.gamma))
+                    .collect()
+            })
             .collect();
         let (weights, biases) =
             Self::solve_weights(&phi, targets, self.n_centers, n_outputs, self.lambda);
@@ -237,7 +254,11 @@ mod tests {
     fn rbf_output_shape() {
         let (inputs, targets) = xor_data();
         let mut rbf = RBF::new(4, 1.0, 2);
-        rbf.train(&inputs, &targets, GradientDescentConfig { lr: 0.0, epochs: 0 });
+        rbf.train(
+            &inputs,
+            &targets,
+            GradientDescentConfig { lr: 0.0, epochs: 0 },
+        );
         assert_eq!(rbf.predict(&inputs[0]).len, 2);
     }
 
@@ -245,7 +266,11 @@ mod tests {
     fn rbf_softmax_sums_to_one() {
         let (inputs, targets) = xor_data();
         let mut rbf = RBF::new(4, 1.0, 2);
-        rbf.train(&inputs, &targets, GradientDescentConfig { lr: 0.0, epochs: 0 });
+        rbf.train(
+            &inputs,
+            &targets,
+            GradientDescentConfig { lr: 0.0, epochs: 0 },
+        );
         for x in &inputs {
             let sum: f64 = rbf.predict(x).data.iter().sum();
             assert!((sum - 1.0).abs() < 1e-10);
@@ -259,8 +284,19 @@ mod tests {
         let mut ok = false;
         for _ in 0..10 {
             let mut rbf = RBF::new(4, 2.0, 2).with_lambda(1e-8);
-            rbf.train(&inputs, &targets, GradientDescentConfig { lr: 0.05, epochs: 300 });
-            if inputs.iter().zip(expected.iter()).all(|(x, &e)| rbf.predict(x).argmax() == e) {
+            rbf.train(
+                &inputs,
+                &targets,
+                GradientDescentConfig {
+                    lr: 0.05,
+                    epochs: 300,
+                },
+            );
+            if inputs
+                .iter()
+                .zip(expected.iter())
+                .all(|(x, &e)| rbf.predict(x).argmax() == e)
+            {
                 ok = true;
                 break;
             }
@@ -272,7 +308,11 @@ mod tests {
     fn rbf_json_roundtrip() {
         let (inputs, targets) = xor_data();
         let mut rbf = RBF::new(4, 1.0, 2);
-        rbf.train(&inputs, &targets, GradientDescentConfig { lr: 0.0, epochs: 0 });
+        rbf.train(
+            &inputs,
+            &targets,
+            GradientDescentConfig { lr: 0.0, epochs: 0 },
+        );
         rbf.save_json("__rbf_test.json").unwrap();
         let loaded = RBF::load_json("__rbf_test.json").unwrap();
         let out_orig = rbf.predict(&inputs[0]);
@@ -287,7 +327,11 @@ mod tests {
     fn rbf_binary_roundtrip() {
         let (inputs, targets) = xor_data();
         let mut rbf = RBF::new(4, 1.0, 2);
-        rbf.train(&inputs, &targets, GradientDescentConfig { lr: 0.0, epochs: 0 });
+        rbf.train(
+            &inputs,
+            &targets,
+            GradientDescentConfig { lr: 0.0, epochs: 0 },
+        );
         rbf.save_binary("__rbf_test.bin").unwrap();
         let loaded = RBF::load_binary("__rbf_test.bin").unwrap();
         let out_orig = rbf.predict(&inputs[0]);

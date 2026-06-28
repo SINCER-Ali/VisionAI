@@ -186,7 +186,11 @@ impl PyRBF {
     #[pyo3(signature = (input_size, output_size, n_centers=10, sigma=1.0))]
     fn new(input_size: usize, output_size: usize, n_centers: usize, sigma: f64) -> Self {
         let _ = input_size; // déduit des données dans train()
-        let gamma = if sigma > 0.0 { 1.0 / (2.0 * sigma * sigma) } else { 1.0 };
+        let gamma = if sigma > 0.0 {
+            1.0 / (2.0 * sigma * sigma)
+        } else {
+            1.0
+        };
         Self {
             model: RBF::new(n_centers, gamma, output_size),
         }

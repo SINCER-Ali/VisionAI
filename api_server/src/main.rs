@@ -413,20 +413,20 @@ async fn predict(
     }
 
     let models = state
-            .models
-            .read()
-            .map_err(|_| ApiError::Internal("lock poisoned".into()))?;
-        let model = models
-            .get(&model_name)
-            .ok_or_else(|| ApiError::NotFound(format!("model '{model_name}' not found")))?;
-        let (class, confidence) = run_prediction(model, &input.data);
+        .models
+        .read()
+        .map_err(|_| ApiError::Internal("lock poisoned".into()))?;
+    let model = models
+        .get(&model_name)
+        .ok_or_else(|| ApiError::NotFound(format!("model '{model_name}' not found")))?;
+    let (class, confidence) = run_prediction(model, &input.data);
 
-        Ok(Json(PredictResponse {
-            model_name,
-            predicted_class: class,
-            confidence,
-        }))
-    }
+    Ok(Json(PredictResponse {
+        model_name,
+        predicted_class: class,
+        confidence,
+    }))
+}
 
 async fn train(
     State(state): State<AppState>,
@@ -479,10 +479,7 @@ async fn train(
         metadata: ModelMetadata {
             name: req.model_name.clone(),
             version: "1.0.0".into(),
-            description: Some(format!(
-                "OvR linear — classes: {}",
-                class_names.join(", ")
-            )),
+            description: Some(format!("OvR linear — classes: {}", class_names.join(", "))),
         },
     };
 
@@ -599,7 +596,11 @@ fn run_prediction(model: &StoredModel, input: &[f64]) -> (String, f64) {
             let max_score = scores.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
             let exps: Vec<f64> = scores.iter().map(|s| (s - max_score).exp()).collect();
             let sum_exp: f64 = exps.iter().sum();
-            let confidence = if sum_exp > 0.0 { exps[best_idx] / sum_exp } else { 1.0 / 3.0 };
+            let confidence = if sum_exp > 0.0 {
+                exps[best_idx] / sum_exp
+            } else {
+                1.0 / 3.0
+            };
 
             (classes[best_idx].to_string(), confidence)
         }
