@@ -16,6 +16,11 @@ build/
 .ipynb_checkpoints/
 
 /datasets/
+**/datasets/
+
+# Modeles entraines (volumineux, regenerables via train_and_save*.py)
+/models/*_weights.json
+/models/rbf_compare.json
 
 .idea/
 .vscode/

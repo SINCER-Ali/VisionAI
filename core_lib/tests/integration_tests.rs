@@ -1,10 +1,16 @@
 use core_lib::math::activations::{Activation, relu, sigmoid, softmax, tanh};
 use core_lib::math::matrix::Matrix;
 use core_lib::math::vector::Vector;
+use core_lib::metrics::{kfold_indices, mae, mse, r_squared};
 use core_lib::models::linear::LinearModel;
 use core_lib::models::mlp::MLP;
+use core_lib::models::rbf::RBF;
+use core_lib::models::svm::{KernelType, SVM};
 use core_lib::models::{Model, TrainConfig};
+use core_lib::optim::adam::Adam;
 use core_lib::optim::gradient_descent::GradientDescentConfig;
+use core_lib::optim::optimizer::Optimizer;
+use core_lib::optim::sgd_momentum::SGDMomentum;
 
 // ─── Vector tests ───────────────────────────────────────────────
 
@@ -600,4 +606,635 @@ fn mlp_deep_network() {
     assert_eq!(output.len, 2);
     let sum: f64 = output.data.iter().sum();
     assert!((sum - 1.0).abs() < 1e-6);
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+fn xor_vectors() -> (Vec<Vector>, Vec<Vector>, Vec<usize>) {
+    let inputs = vec![
+        Vector::from_vec(vec![0.0, 0.0]),
+        Vector::from_vec(vec![0.0, 1.0]),
+        Vector::from_vec(vec![1.0, 0.0]),
+        Vector::from_vec(vec![1.0, 1.0]),
+    ];
+    let targets = vec![
+        Vector::from_vec(vec![1.0, 0.0]),
+        Vector::from_vec(vec![0.0, 1.0]),
+        Vector::from_vec(vec![0.0, 1.0]),
+        Vector::from_vec(vec![1.0, 0.0]),
+    ];
+    (inputs, targets, vec![0, 1, 1, 0])
+}
+
+fn and_vectors() -> (Vec<Vector>, Vec<Vector>, Vec<usize>) {
+    let inputs = vec![
+        Vector::from_vec(vec![0.0, 0.0]),
+        Vector::from_vec(vec![0.0, 1.0]),
+        Vector::from_vec(vec![1.0, 0.0]),
+        Vector::from_vec(vec![1.0, 1.0]),
+    ];
+    let targets = vec![
+        Vector::from_vec(vec![1.0, 0.0]),
+        Vector::from_vec(vec![1.0, 0.0]),
+        Vector::from_vec(vec![1.0, 0.0]),
+        Vector::from_vec(vec![0.0, 1.0]),
+    ];
+    (inputs, targets, vec![0, 0, 0, 1])
+}
+
+fn three_class_vectors() -> (Vec<Vector>, Vec<Vector>, Vec<usize>) {
+    let inputs = vec![
+        Vector::from_vec(vec![0.0, 0.0]),
+        Vector::from_vec(vec![0.1, 0.1]),
+        Vector::from_vec(vec![0.0, 0.2]),
+        Vector::from_vec(vec![1.0, 1.0]),
+        Vector::from_vec(vec![0.9, 0.9]),
+        Vector::from_vec(vec![1.0, 0.9]),
+        Vector::from_vec(vec![1.0, 0.0]),
+        Vector::from_vec(vec![0.9, 0.1]),
+        Vector::from_vec(vec![1.0, 0.1]),
+    ];
+    let targets = vec![
+        Vector::from_vec(vec![1.0, 0.0, 0.0]),
+        Vector::from_vec(vec![1.0, 0.0, 0.0]),
+        Vector::from_vec(vec![1.0, 0.0, 0.0]),
+        Vector::from_vec(vec![0.0, 1.0, 0.0]),
+        Vector::from_vec(vec![0.0, 1.0, 0.0]),
+        Vector::from_vec(vec![0.0, 1.0, 0.0]),
+        Vector::from_vec(vec![0.0, 0.0, 1.0]),
+        Vector::from_vec(vec![0.0, 0.0, 1.0]),
+        Vector::from_vec(vec![0.0, 0.0, 1.0]),
+    ];
+    (inputs, targets, vec![0, 0, 0, 1, 1, 1, 2, 2, 2])
+}
+
+// ── RBF tests ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn rbf_output_shape_integration() {
+    let (inputs, targets, _) = xor_vectors();
+    let mut rbf = RBF::new(4, 1.0, 2);
+    rbf.train(
+        &inputs,
+        &targets,
+        GradientDescentConfig { lr: 0.0, epochs: 0 },
+    );
+    let out = rbf.predict(&inputs[0]);
+    assert_eq!(out.len, 2);
+    let sum: f64 = out.data.iter().sum();
+    assert!((sum - 1.0).abs() < 1e-10);
+}
+
+#[test]
+fn rbf_xor_integration() {
+    let (inputs, targets, expected) = xor_vectors();
+    let mut ok = false;
+    for _ in 0..10 {
+        let mut rbf = RBF::new(4, 2.0, 2).with_lambda(1e-8);
+        rbf.train(
+            &inputs,
+            &targets,
+            GradientDescentConfig {
+                lr: 0.05,
+                epochs: 300,
+            },
+        );
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| rbf.predict(x).argmax() == e)
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(ok, "RBF doit resoudre XOR");
+}
+
+#[test]
+fn rbf_and_integration() {
+    let (inputs, targets, expected) = and_vectors();
+    let mut ok = false;
+    for _ in 0..5 {
+        let mut rbf = RBF::new(4, 1.0, 2).with_lambda(1e-6);
+        rbf.train(
+            &inputs,
+            &targets,
+            GradientDescentConfig {
+                lr: 0.01,
+                epochs: 0,
+            },
+        );
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| rbf.predict(x).argmax() == e)
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(ok, "RBF doit resoudre AND");
+}
+
+#[test]
+fn rbf_multiclass_integration() {
+    let (inputs, targets, expected) = three_class_vectors();
+    let mut ok = false;
+    for _ in 0..5 {
+        let mut rbf = RBF::new(9, 1.0, 3).with_lambda(1e-6);
+        rbf.train(
+            &inputs,
+            &targets,
+            GradientDescentConfig { lr: 0.0, epochs: 0 },
+        );
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| rbf.predict(x).argmax() == e)
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(ok, "RBF doit classifier 3 classes");
+}
+
+#[test]
+fn rbf_json_roundtrip_integration() {
+    let (inputs, targets, _) = xor_vectors();
+    let mut rbf = RBF::new(4, 1.0, 2);
+    rbf.train(
+        &inputs,
+        &targets,
+        GradientDescentConfig { lr: 0.0, epochs: 0 },
+    );
+    rbf.save_json("__it_rbf.json").unwrap();
+    let loaded = RBF::load_json("__it_rbf.json").unwrap();
+    let out_a = rbf.predict(&inputs[0]);
+    let out_b = loaded.predict(&inputs[0]);
+    for (a, b) in out_a.data.iter().zip(out_b.data.iter()) {
+        assert!((a - b).abs() < 1e-10);
+    }
+    std::fs::remove_file("__it_rbf.json").ok();
+}
+
+// ── SVM lineaire tests ────────────────────────────────────────────────────────
+
+#[test]
+fn linear_svm_and_integration() {
+    let (inputs, targets, expected) = and_vectors();
+    let mut ok = false;
+    for _ in 0..5 {
+        let mut svm = SVM::new_linear(10.0);
+        svm.train(&inputs, &targets, 0.05, 2000);
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| svm.predict(x).argmax() == e)
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(ok, "SVM lineaire doit resoudre AND");
+}
+
+#[test]
+fn linear_svm_or_integration() {
+    let inputs = vec![
+        Vector::from_vec(vec![0.0, 0.0]),
+        Vector::from_vec(vec![0.0, 1.0]),
+        Vector::from_vec(vec![1.0, 0.0]),
+        Vector::from_vec(vec![1.0, 1.0]),
+    ];
+    let targets = vec![
+        Vector::from_vec(vec![1.0, 0.0]),
+        Vector::from_vec(vec![0.0, 1.0]),
+        Vector::from_vec(vec![0.0, 1.0]),
+        Vector::from_vec(vec![0.0, 1.0]),
+    ];
+    let expected = [0usize, 1, 1, 1];
+    let mut ok = false;
+    for _ in 0..5 {
+        let mut svm = SVM::new_linear(10.0);
+        svm.train(&inputs, &targets, 0.05, 2000);
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| svm.predict(x).argmax() == e)
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(ok, "SVM lineaire doit resoudre OR");
+}
+
+#[test]
+fn linear_svm_multiclass_integration() {
+    let (inputs, targets, expected) = three_class_vectors();
+    let mut ok = false;
+    for _ in 0..5 {
+        let mut svm = SVM::new_linear(10.0);
+        svm.train(&inputs, &targets, 0.05, 3000);
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| svm.predict(x).argmax() == e)
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(ok, "SVM lineaire doit classifier 3 classes");
+}
+
+#[test]
+fn linear_svm_output_is_softmax() {
+    let (inputs, targets, _) = and_vectors();
+    let mut svm = SVM::new_linear(1.0);
+    svm.train(&inputs, &targets, 0.1, 500);
+    for x in &inputs {
+        let sum: f64 = svm.predict(x).data.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-10);
+    }
+}
+
+// ── SVM a noyau tests ─────────────────────────────────────────────────────────
+
+#[test]
+fn kernel_svm_rbf_xor_integration() {
+    let (inputs, targets, expected) = xor_vectors();
+    let mut ok = false;
+    for _ in 0..5 {
+        let mut svm = SVM::new_kernel(5.0, KernelType::RBF { gamma: 1.0 });
+        svm.train(&inputs, &targets, 0.0, 300);
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| svm.predict(x).argmax() == e)
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(ok, "SVM RBF doit resoudre XOR");
+}
+
+#[test]
+fn kernel_svm_poly_and_integration() {
+    let (inputs, targets, expected) = and_vectors();
+    let mut ok = false;
+    for _ in 0..5 {
+        let mut svm = SVM::new_kernel(
+            10.0,
+            KernelType::Polynomial {
+                degree: 2,
+                coef0: 1.0,
+            },
+        );
+        svm.train(&inputs, &targets, 0.0, 200);
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| svm.predict(x).argmax() == e)
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(ok, "SVM polynomial doit resoudre AND");
+}
+
+#[test]
+fn kernel_svm_linear_kernel_and() {
+    let (inputs, targets, expected) = and_vectors();
+    let mut ok = false;
+    for _ in 0..5 {
+        let mut svm = SVM::new_kernel(10.0, KernelType::Linear);
+        svm.train(&inputs, &targets, 0.0, 200);
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| svm.predict(x).argmax() == e)
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(ok, "SVM noyau lineaire doit resoudre AND");
+}
+
+#[test]
+fn svm_json_roundtrip_integration() {
+    let (inputs, targets, _) = and_vectors();
+    let mut svm = SVM::new_linear(1.0);
+    svm.train(&inputs, &targets, 0.1, 500);
+    svm.save_json("__it_svm.json").unwrap();
+    let loaded = SVM::load_json("__it_svm.json").unwrap();
+    let out_a = svm.predict(&inputs[0]);
+    let out_b = loaded.predict(&inputs[0]);
+    for (a, b) in out_a.data.iter().zip(out_b.data.iter()) {
+        assert!((a - b).abs() < 1e-10);
+    }
+    std::fs::remove_file("__it_svm.json").ok();
+}
+
+// ── Optimiseurs tests ─────────────────────────────────────────────────────────
+
+#[test]
+fn sgd_momentum_mlp_xor() {
+    let (inputs, targets, expected) = xor_vectors();
+    let mut ok = false;
+    for _ in 0..5 {
+        let mut mlp = MLP::new(&[2, 16, 2]).with_activation(Activation::Sigmoid);
+        let mut opt = SGDMomentum::new(0.5, 0.9);
+        mlp.train_with_optimizer(&inputs, &targets, 5000, &mut opt);
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| mlp.predict(x).argmax() == e)
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(ok, "MLP + SGD Momentum doit resoudre XOR");
+}
+
+#[test]
+fn adam_mlp_xor() {
+    let (inputs, targets, expected) = xor_vectors();
+    let mut ok = false;
+    for _ in 0..5 {
+        let mut mlp = MLP::new(&[2, 16, 2]).with_activation(Activation::Sigmoid);
+        let mut opt = Adam::new(0.01);
+        mlp.train_with_optimizer(&inputs, &targets, 3000, &mut opt);
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| mlp.predict(x).argmax() == e)
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(ok, "MLP + Adam doit resoudre XOR");
+}
+
+#[test]
+fn sgd_momentum_reduces_loss() {
+    let (inputs, targets, expected) = and_vectors();
+    let mut mlp = MLP::new(&[2, 8, 2]).with_activation(Activation::Sigmoid);
+    let mut opt = SGDMomentum::new(0.5, 0.9);
+    mlp.train_with_optimizer(&inputs, &targets, 3000, &mut opt);
+    let correct: usize = (0..inputs.len())
+        .filter(|&i| mlp.predict(&inputs[i]).argmax() == expected[i])
+        .count();
+    assert!(correct >= 3);
+}
+
+#[test]
+fn adam_optimizer_reset() {
+    let mut adam = Adam::new(0.001);
+    let v1 = adam.update(0, 1.0, 0.5);
+    adam.reset();
+    let v2 = adam.update(0, 1.0, 0.5);
+    assert!((v1 - v2).abs() < 1e-10);
+}
+
+#[test]
+fn sgd_nesterov_mlp_and() {
+    let (inputs, targets, expected) = and_vectors();
+    let mut mlp = MLP::new(&[2, 8, 2]).with_activation(Activation::Sigmoid);
+    let mut opt = SGDMomentum::new(0.5, 0.9).with_nesterov();
+    mlp.train_with_optimizer(&inputs, &targets, 2000, &mut opt);
+    let correct: usize = (0..inputs.len())
+        .filter(|&i| mlp.predict(&inputs[i]).argmax() == expected[i])
+        .count();
+    assert!(correct >= 3);
+}
+
+// ── Metriques tests ───────────────────────────────────────────────────────────
+
+#[test]
+fn metrics_mse_perfect() {
+    assert_eq!(mse(&[1.0, 2.0, 3.0], &[1.0, 2.0, 3.0]), 0.0);
+}
+
+#[test]
+fn metrics_mse_known_value() {
+    assert!((mse(&[0.0, 0.0], &[2.0, 4.0]) - 10.0).abs() < 1e-10);
+}
+
+#[test]
+fn metrics_mae_perfect() {
+    assert_eq!(mae(&[1.0, 2.0, 3.0], &[1.0, 2.0, 3.0]), 0.0);
+}
+
+#[test]
+fn metrics_mae_known_value() {
+    assert!((mae(&[0.0, 0.0], &[2.0, 4.0]) - 3.0).abs() < 1e-10);
+}
+
+#[test]
+fn metrics_r_squared_perfect() {
+    let r2 = r_squared(&[1.0, 2.0, 3.0, 4.0], &[1.0, 2.0, 3.0, 4.0]);
+    assert!((r2 - 1.0).abs() < 1e-10);
+}
+
+#[test]
+fn metrics_r_squared_mean_predictor() {
+    let targets = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+    let preds = vec![3.0f64; 5];
+    assert!(r_squared(&preds, &targets).abs() < 1e-10);
+}
+
+#[test]
+fn metrics_kfold_correct_sizes() {
+    let folds = kfold_indices(20, 4);
+    assert_eq!(folds.len(), 4);
+    for (train, test) in &folds {
+        assert_eq!(test.len(), 5);
+        assert_eq!(train.len(), 15);
+    }
+}
+
+#[test]
+fn metrics_kfold_no_overlap() {
+    let folds = kfold_indices(10, 5);
+    for (train, test) in &folds {
+        for &t in test {
+            assert!(!train.contains(&t));
+        }
+    }
+}
+
+// ── Comparaison des modeles ───────────────────────────────────────────────────
+
+#[test]
+fn compare_all_models_on_and() {
+    let (inputs, targets, expected) = and_vectors();
+    let mut mlp_ok = false;
+    for _ in 0..5 {
+        let mut mlp = MLP::new(&[2, 8, 2]).with_activation(Activation::Sigmoid);
+        mlp.train(
+            &inputs,
+            &targets,
+            GradientDescentConfig {
+                lr: 1.0,
+                epochs: 3000,
+            },
+        );
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| mlp.predict(x).argmax() == e)
+        {
+            mlp_ok = true;
+            break;
+        }
+    }
+    let mut rbf_ok = false;
+    for _ in 0..5 {
+        let mut rbf = RBF::new(4, 1.0, 2).with_lambda(1e-6);
+        rbf.train(
+            &inputs,
+            &targets,
+            GradientDescentConfig { lr: 0.0, epochs: 0 },
+        );
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| rbf.predict(x).argmax() == e)
+        {
+            rbf_ok = true;
+            break;
+        }
+    }
+    let mut svm_ok = false;
+    for _ in 0..5 {
+        let mut svm = SVM::new_linear(10.0);
+        svm.train(&inputs, &targets, 0.05, 2000);
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| svm.predict(x).argmax() == e)
+        {
+            svm_ok = true;
+            break;
+        }
+    }
+    assert!(mlp_ok, "MLP doit reussir AND");
+    assert!(rbf_ok, "RBF doit reussir AND");
+    assert!(svm_ok, "SVM doit reussir AND");
+}
+
+#[test]
+fn compare_nonlinear_models_on_xor() {
+    let (inputs, targets, expected) = xor_vectors();
+    let mut mlp_ok = false;
+    for _ in 0..5 {
+        let mut mlp = MLP::new(&[2, 16, 2]).with_activation(Activation::Sigmoid);
+        mlp.train(
+            &inputs,
+            &targets,
+            GradientDescentConfig {
+                lr: 1.0,
+                epochs: 5000,
+            },
+        );
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| mlp.predict(x).argmax() == e)
+        {
+            mlp_ok = true;
+            break;
+        }
+    }
+    let mut rbf_ok = false;
+    for _ in 0..10 {
+        let mut rbf = RBF::new(4, 2.0, 2).with_lambda(1e-8);
+        rbf.train(
+            &inputs,
+            &targets,
+            GradientDescentConfig {
+                lr: 0.05,
+                epochs: 300,
+            },
+        );
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| rbf.predict(x).argmax() == e)
+        {
+            rbf_ok = true;
+            break;
+        }
+    }
+    let mut svm_ok = false;
+    for _ in 0..5 {
+        let mut svm = SVM::new_kernel(5.0, KernelType::RBF { gamma: 1.0 });
+        svm.train(&inputs, &targets, 0.0, 300);
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| svm.predict(x).argmax() == e)
+        {
+            svm_ok = true;
+            break;
+        }
+    }
+    assert!(mlp_ok, "MLP doit resoudre XOR");
+    assert!(rbf_ok, "RBF doit resoudre XOR");
+    assert!(svm_ok, "SVM RBF doit resoudre XOR");
+}
+
+#[test]
+fn circles_dataset_mlp_vs_rbf() {
+    let inputs: Vec<Vector> = vec![
+        Vector::from_vec(vec![0.1, 0.0]),
+        Vector::from_vec(vec![-0.1, 0.0]),
+        Vector::from_vec(vec![0.0, 0.1]),
+        Vector::from_vec(vec![0.0, -0.1]),
+        Vector::from_vec(vec![1.0, 0.0]),
+        Vector::from_vec(vec![-1.0, 0.0]),
+        Vector::from_vec(vec![0.0, 1.0]),
+        Vector::from_vec(vec![0.0, -1.0]),
+    ];
+    let mut targets: Vec<Vector> = vec![Vector::from_vec(vec![1.0, 0.0]); 4];
+    targets.extend(vec![Vector::from_vec(vec![0.0, 1.0]); 4]);
+    let expected = [0usize, 0, 0, 0, 1, 1, 1, 1];
+
+    let mut rbf_ok = false;
+    for _ in 0..20 {
+        let mut rbf = RBF::new(4, 2.0, 2).with_lambda(1e-6);
+        rbf.train(
+            &inputs,
+            &targets,
+            GradientDescentConfig {
+                lr: 0.05,
+                epochs: 300,
+            },
+        );
+        if inputs
+            .iter()
+            .zip(expected.iter())
+            .all(|(x, &e)| rbf.predict(x).argmax() == e)
+        {
+            rbf_ok = true;
+            break;
+        }
+    }
+    let mut svm = SVM::new_kernel(10.0, KernelType::RBF { gamma: 2.0 });
+    svm.train(&inputs, &targets, 0.0, 500);
+    let svm_ok = inputs
+        .iter()
+        .zip(expected.iter())
+        .all(|(x, &e)| svm.predict(x).argmax() == e);
+
+    assert!(rbf_ok, "RBF doit separer cercles");
+    assert!(svm_ok, "SVM RBF doit separer cercles");
 }

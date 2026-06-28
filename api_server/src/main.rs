@@ -24,6 +24,8 @@ use walkdir::WalkDir;
 use core_lib::math::vector::Vector as CoreVector;
 use core_lib::models::linear::LinearModel;
 use core_lib::models::mlp::MLP;
+use core_lib::models::rbf::RBF;
+use core_lib::models::svm::SVM;
 use core_lib::models::{Model, TrainConfig};
 
 #[derive(Clone)]
@@ -31,16 +33,20 @@ struct AppState {
     models: Arc<RwLock<HashMap<String, StoredModel>>>,
     models_dir: PathBuf,
     mlp: Arc<RwLock<Option<MLP>>>,
+    rbf: Arc<RwLock<Option<RBF>>>,
+    svm: Arc<RwLock<Option<SVM>>>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum StoredModel {
+    /// Modèle linéaire one-vs-rest : 3 modèles indépendants (aucun / humain / animal).
+    /// weights_per_class[i] et biases[i] correspondent à la classe i.
     Linear {
         name: String,
         input_size: usize,
-        weights: Vec<f64>,
-        bias: f64,
+        weights_per_class: Vec<Vec<f64>>,
+        biases: Vec<f64>,
         metadata: ModelMetadata,
     },
 }
@@ -106,8 +112,14 @@ struct TrainMetrics {
 }
 
 #[derive(Serialize)]
+struct ModelInfo {
+    name: String,
+    kind: String,
+}
+
+#[derive(Serialize)]
 struct ModelsResponse {
-    models: Vec<StoredModel>,
+    models: Vec<ModelInfo>,
 }
 
 #[derive(Serialize)]
@@ -130,10 +142,26 @@ async fn main() {
         info!("No MLP model found");
     }
 
+    let rbf = load_rbf_model();
+    if rbf.is_some() {
+        info!("RBF model loaded successfully");
+    } else {
+        info!("No RBF model found");
+    }
+
+    let svm = load_svm_model();
+    if svm.is_some() {
+        info!("SVM model loaded successfully");
+    } else {
+        info!("No SVM model found");
+    }
+
     let state = AppState {
         models: Arc::new(RwLock::new(loaded_models)),
         models_dir,
         mlp: Arc::new(RwLock::new(mlp)),
+        rbf: Arc::new(RwLock::new(rbf)),
+        svm: Arc::new(RwLock::new(svm)),
     };
 
     let app = Router::new()
@@ -163,6 +191,34 @@ fn load_mlp_model() -> Option<MLP> {
             Err(e) => {
                 error!("Erreur chargement poids MLP: {}", e);
             }
+        }
+    }
+    None
+}
+
+fn load_rbf_model() -> Option<RBF> {
+    let path = "models/rbf_weights.json";
+    if std::path::Path::new(path).exists() {
+        match RBF::load_json(path) {
+            Ok(rbf) => {
+                info!("RBF chargé depuis {}", path);
+                return Some(rbf);
+            }
+            Err(e) => error!("Erreur chargement RBF: {}", e),
+        }
+    }
+    None
+}
+
+fn load_svm_model() -> Option<SVM> {
+    let path = "models/svm_weights.json";
+    if std::path::Path::new(path).exists() {
+        match SVM::load_json(path) {
+            Ok(svm) => {
+                info!("SVM chargé depuis {}", path);
+                return Some(svm);
+            }
+            Err(e) => error!("Erreur chargement SVM: {}", e),
         }
     }
     None
@@ -218,13 +274,59 @@ async fn preflight() -> Response {
 }
 
 async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsResponse>, ApiError> {
+    let mut list: Vec<ModelInfo> = Vec::new();
+
+    // Modèles en mémoire (mlp, rbf)
+    if state
+        .mlp
+        .read()
+        .map_err(|_| ApiError::Internal("lock poisoned".into()))?
+        .is_some()
+    {
+        list.push(ModelInfo {
+            name: "mlp".into(),
+            kind: "mlp".into(),
+        });
+    }
+    if state
+        .rbf
+        .read()
+        .map_err(|_| ApiError::Internal("lock poisoned".into()))?
+        .is_some()
+    {
+        list.push(ModelInfo {
+            name: "rbf".into(),
+            kind: "rbf".into(),
+        });
+    }
+    if state
+        .svm
+        .read()
+        .map_err(|_| ApiError::Internal("lock poisoned".into()))?
+        .is_some()
+    {
+        list.push(ModelInfo {
+            name: "svm".into(),
+            kind: "svm".into(),
+        });
+    }
+
+    // Modèles chargés depuis le disque (linéaires one-vs-rest)
     let models = state
         .models
         .read()
         .map_err(|_| ApiError::Internal("lock poisoned".into()))?;
-    Ok(Json(ModelsResponse {
-        models: models.values().cloned().collect(),
-    }))
+    for (name, m) in models.iter() {
+        let kind = match m {
+            StoredModel::Linear { .. } => "linear",
+        };
+        list.push(ModelInfo {
+            name: name.clone(),
+            kind: kind.into(),
+        });
+    }
+
+    Ok(Json(ModelsResponse { models: list }))
 }
 
 async fn reload_models(State(state): State<AppState>) -> Result<Json<ReloadResponse>, ApiError> {
@@ -275,6 +377,40 @@ async fn predict(
             }));
         }
     }
+    if model_name == "rbf" {
+        let rbf_lock = state
+            .rbf
+            .read()
+            .map_err(|_| ApiError::Internal("lock poisoned".into()))?;
+        if let Some(rbf) = rbf_lock.as_ref() {
+            let output = rbf.predict(&input);
+            let classes = ["aucun", "humain", "animal"];
+            let best_idx = output.argmax();
+            let confidence = output.data[best_idx];
+            return Ok(Json(PredictResponse {
+                model_name,
+                predicted_class: classes[best_idx].to_string(),
+                confidence,
+            }));
+        }
+    }
+    if model_name == "svm" {
+        let svm_lock = state
+            .svm
+            .read()
+            .map_err(|_| ApiError::Internal("lock poisoned".into()))?;
+        if let Some(svm) = svm_lock.as_ref() {
+            let output = svm.predict(&input);
+            let classes = ["aucun", "humain", "animal"];
+            let best_idx = output.argmax();
+            let confidence = output.data[best_idx];
+            return Ok(Json(PredictResponse {
+                model_name,
+                predicted_class: classes[best_idx].to_string(),
+                confidence,
+            }));
+        }
+    }
 
     let models = state
         .models
@@ -303,25 +439,47 @@ async fn train(
         return Err(ApiError::BadRequest("lr must be > 0".into()));
     }
 
-    let input_size = req.input_size.unwrap_or(128);
-    let mut model = LinearModel::new(input_size);
-    let synthetic_inputs = vec![vec![0.0; input_size], vec![1.0; input_size]];
-    let synthetic_targets = vec![vec![0.0], vec![1.0]];
+    let input_size = req.input_size.unwrap_or(12288);
     let cfg = TrainConfig {
         learning_rate: req.lr,
         epochs: req.epochs,
     };
-    model.train(&synthetic_inputs, &synthetic_targets, &cfg);
+
+    // One-vs-rest : un modèle linéaire par classe (aucun=0, humain=1, animal=2)
+    let class_names = ["aucun", "humain", "animal"];
+    let mut weights_per_class: Vec<Vec<f64>> = Vec::new();
+    let mut biases: Vec<f64> = Vec::new();
+
+    // Données synthétiques équilibrées par classe (à remplacer par vraies données)
+    let synthetic_inputs: Vec<Vec<f64>> = (0..3)
+        .map(|cls| {
+            let mut v = vec![0.0; input_size];
+            if input_size > cls {
+                v[cls] = 1.0;
+            }
+            v
+        })
+        .collect();
+
+    for cls_idx in 0..3 {
+        let mut m = LinearModel::new(input_size);
+        let targets: Vec<Vec<f64>> = (0..3)
+            .map(|i| vec![if i == cls_idx { 1.0 } else { 0.0 }])
+            .collect();
+        m.train(&synthetic_inputs, &targets, &cfg);
+        weights_per_class.push(m.weights.clone());
+        biases.push(m.bias);
+    }
 
     let stored = StoredModel::Linear {
         name: req.model_name.clone(),
         input_size,
-        weights: model.weights.clone(),
-        bias: model.bias,
+        weights_per_class,
+        biases,
         metadata: ModelMetadata {
             name: req.model_name.clone(),
             version: "1.0.0".into(),
-            description: Some("Trained from API server".into()),
+            description: Some(format!("OvR linear — classes: {}", class_names.join(", "))),
         },
     };
 
@@ -342,7 +500,7 @@ async fn train(
         dataset_path: req.dataset_path,
         metrics: TrainMetrics {
             final_loss: 0.0,
-            accuracy: 0.702,
+            accuracy: 0.0,
         },
     }))
 }
@@ -356,6 +514,15 @@ fn load_models_from_disk(dir: &Path) -> HashMap<String, StoredModel> {
     for entry in WalkDir::new(dir).into_iter().filter_map(Result::ok) {
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        // Ces fichiers sont des poids de modèles chargés en mémoire (MLP/RBF/SVM),
+        // pas des StoredModel (modèles linéaires du disque) → on les ignore ici.
+        let fname = path.file_name().and_then(|f| f.to_str()).unwrap_or("");
+        if fname.ends_with("_weights.json")
+            || fname.ends_with("_config.json")
+            || fname.ends_with("_compare.json")
+        {
             continue;
         }
         match fs::read_to_string(path) {
@@ -396,21 +563,46 @@ fn get_input_size(model: &StoredModel) -> usize {
     }
 }
 
-fn run_prediction(model: &StoredModel, input: &Vec<f64>) -> (String, f64) {
+fn run_prediction(model: &StoredModel, input: &[f64]) -> (String, f64) {
     match model {
-        StoredModel::Linear { weights, bias, .. } => {
-            let mut m = LinearModel::new(weights.len());
-            m.weights = weights.clone();
-            m.bias = *bias;
-            let out = m.predict(input)[0];
-            let (class, confidence) = if out >= 0.66 {
-                ("animal", out.min(1.0))
-            } else if out >= 0.33 {
-                ("humain", out.min(1.0))
+        StoredModel::Linear {
+            weights_per_class,
+            biases,
+            input_size,
+            ..
+        } => {
+            let classes = ["aucun", "humain", "animal"];
+
+            // One-vs-rest : on calcule un score par classe et on prend l'argmax
+            let scores: Vec<f64> = weights_per_class
+                .iter()
+                .zip(biases.iter())
+                .map(|(weights, bias)| {
+                    let mut m = LinearModel::new(*input_size);
+                    m.weights = weights.clone();
+                    m.bias = *bias;
+                    m.predict(&input.to_vec())[0]
+                })
+                .collect();
+
+            let best_idx = scores
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+
+            // Softmax sur les scores pour obtenir une confiance normalisée
+            let max_score = scores.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+            let exps: Vec<f64> = scores.iter().map(|s| (s - max_score).exp()).collect();
+            let sum_exp: f64 = exps.iter().sum();
+            let confidence = if sum_exp > 0.0 {
+                exps[best_idx] / sum_exp
             } else {
-                ("rien", (1.0 - out.abs()).max(0.0))
+                1.0 / 3.0
             };
-            (class.to_string(), confidence)
+
+            (classes[best_idx].to_string(), confidence)
         }
     }
 }
