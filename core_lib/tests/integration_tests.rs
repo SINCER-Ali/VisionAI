@@ -9,6 +9,7 @@ use core_lib::models::rbf::RBF;
 use core_lib::models::svm::{KernelType, SVM};
 use core_lib::optim::adam::Adam;
 use core_lib::optim::gradient_descent::GradientDescentConfig;
+use core_lib::optim::optimizer::Optimizer;
 use core_lib::optim::sgd_momentum::SGDMomentum;
 
 // ─── Vector tests ───────────────────────────────────────────────
