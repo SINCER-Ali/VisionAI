@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn rbf_xor_converges() {
         let (inputs, targets) = xor_data();
-        let expected = vec![0usize, 1, 1, 0];
+        let expected = [0usize, 1, 1, 0];
         let mut ok = false;
         for _ in 0..10 {
             let mut rbf = RBF::new(4, 2.0, 2).with_lambda(1e-8);

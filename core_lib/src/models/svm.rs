@@ -414,7 +414,7 @@ mod tests {
     #[test]
     fn linear_svm_and_converges() {
         let (inputs, targets) = and_data();
-        let expected = vec![0usize, 0, 0, 1];
+        let expected = [0usize, 0, 0, 1];
         let mut ok = false;
         for _ in 0..5 {
             let mut svm = SVM::new_linear(10.0);
@@ -445,7 +445,7 @@ mod tests {
             Vector::from_vec(vec![0.0, 1.0]),
             Vector::from_vec(vec![0.0, 1.0]),
         ];
-        let expected = vec![0usize, 1, 1, 1];
+        let expected = [0usize, 1, 1, 1];
         let mut ok = false;
         for _ in 0..5 {
             let mut svm = SVM::new_linear(10.0);
@@ -465,7 +465,7 @@ mod tests {
     #[test]
     fn kernel_svm_xor_rbf() {
         let (inputs, targets) = xor_data();
-        let expected = vec![0usize, 1, 1, 0];
+        let expected = [0usize, 1, 1, 0];
         let mut ok = false;
         for _ in 0..5 {
             let mut svm = SVM::new_kernel(5.0, KernelType::RBF { gamma: 1.0 });

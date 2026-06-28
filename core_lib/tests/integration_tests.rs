@@ -814,7 +814,7 @@ fn linear_svm_or_integration() {
         Vector::from_vec(vec![0.0, 1.0]),
         Vector::from_vec(vec![0.0, 1.0]),
     ];
-    let expected = vec![0usize, 1, 1, 1];
+    let expected = [0usize, 1, 1, 1];
     let mut ok = false;
     for _ in 0..5 {
         let mut svm = SVM::new_linear(10.0);
@@ -1206,7 +1206,7 @@ fn circles_dataset_mlp_vs_rbf() {
     ];
     let mut targets: Vec<Vector> = vec![Vector::from_vec(vec![1.0, 0.0]); 4];
     targets.extend(vec![Vector::from_vec(vec![0.0, 1.0]); 4]);
-    let expected = vec![0usize, 0, 0, 0, 1, 1, 1, 1];
+    let expected = [0usize, 0, 0, 0, 1, 1, 1, 1];
 
     let mut rbf_ok = false;
     for _ in 0..20 {
