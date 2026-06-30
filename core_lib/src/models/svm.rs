@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 pub enum KernelType {
     Linear,
     RBF { gamma: f64 },
-    Polynomial { degree: usize, coef0: f64 },
 }
 
 impl KernelType {
@@ -18,7 +17,6 @@ impl KernelType {
                 let diff = a.sub(b);
                 (-gamma * diff.dot(&diff)).exp()
             }
-            KernelType::Polynomial { degree, coef0 } => (a.dot(b) + coef0).powi(*degree as i32),
         }
     }
 }
@@ -343,15 +341,6 @@ impl SVM {
         let content = std::fs::read_to_string(path)?;
         Ok(serde_json::from_str(&content)?)
     }
-    pub fn save_binary(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let encoded = bincode::serialize(self)?;
-        std::fs::write(path, encoded)?;
-        Ok(())
-    }
-    pub fn load_binary(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data = std::fs::read(path)?;
-        Ok(bincode::deserialize(&data)?)
-    }
 }
 
 #[cfg(test)]
@@ -495,20 +484,5 @@ mod tests {
             assert!((a - b).abs() < 1e-10);
         }
         std::fs::remove_file("__svm_test.json").ok();
-    }
-
-    #[test]
-    fn svm_binary_roundtrip() {
-        let (inputs, targets) = and_data();
-        let mut svm = SVM::new_linear(1.0);
-        svm.train(&inputs, &targets, 0.1, 500);
-        svm.save_binary("__svm_test.bin").unwrap();
-        let loaded = SVM::load_binary("__svm_test.bin").unwrap();
-        let out_orig = svm.predict(&inputs[0]);
-        let out_load = loaded.predict(&inputs[0]);
-        for (a, b) in out_orig.data.iter().zip(out_load.data.iter()) {
-            assert!((a - b).abs() < 1e-10);
-        }
-        std::fs::remove_file("__svm_test.bin").ok();
     }
 }

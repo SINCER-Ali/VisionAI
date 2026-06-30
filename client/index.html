@@ -297,6 +297,39 @@
             </div>
         </div>
 
+        <div class="card">
+            <h2>Resultats &amp; analyse</h2>
+            <p style="font-size:0.8rem;color:#888;margin-bottom:1rem;">
+                Images generees par les scripts Python (courbe_apprentissage.py, matrice_confusion.py, generer_graphiques.py).
+            </p>
+            <div style="display:flex;flex-direction:column;gap:1.2rem;">
+                <figure style="margin:0;">
+                    <img src="../graphiques/courbe_apprentissage_dataset.png" alt="Courbe d'apprentissage"
+                         style="width:100%;border-radius:8px;background:#fff;"
+                         onerror="this.parentElement.style.display='none'">
+                    <figcaption style="font-size:0.8rem;color:#888;margin-top:0.4rem;">Courbe d'apprentissage sur le dataset (perte &amp; exactitude)</figcaption>
+                </figure>
+                <figure style="margin:0;">
+                    <img src="../graphiques/matrice_confusion.png" alt="Matrice de confusion"
+                         style="width:100%;border-radius:8px;background:#fff;"
+                         onerror="this.parentElement.style.display='none'">
+                    <figcaption style="font-size:0.8rem;color:#888;margin-top:0.4rem;">Matrice de confusion (dataset)</figcaption>
+                </figure>
+                <figure style="margin:0;">
+                    <img src="../graphiques/4_comparaison_modeles.png" alt="Comparaison des modeles"
+                         style="width:100%;border-radius:8px;background:#fff;"
+                         onerror="this.parentElement.style.display='none'">
+                    <figcaption style="font-size:0.8rem;color:#888;margin-top:0.4rem;">Comparaison des modeles (cas de test)</figcaption>
+                </figure>
+                <figure style="margin:0;">
+                    <img src="../graphiques/1_frontieres_decision.png" alt="Frontieres de decision"
+                         style="width:100%;border-radius:8px;background:#fff;"
+                         onerror="this.parentElement.style.display='none'">
+                    <figcaption style="font-size:0.8rem;color:#888;margin-top:0.4rem;">Frontieres de decision des 4 modeles</figcaption>
+                </figure>
+            </div>
+        </div>
+
         <div class="error-msg" id="error-msg"></div>
     </main>
 
@@ -449,6 +482,20 @@
         window.addEventListener('load', function() {
             btnRefresh.click();
         });
+
+        // Recharge automatiquement les images toutes les 3 s, sans clignotement
+        // (chargement en arriere-plan puis echange une fois pret)
+        setInterval(function() {
+            document.querySelectorAll('figure img[src*="graphiques/"]').forEach(function(img) {
+                var base = img.src.split('?')[0];
+                var tmp = new Image();
+                tmp.onload = function() {
+                    img.src = tmp.src;
+                    img.parentElement.style.display = '';
+                };
+                tmp.src = base + '?t=' + Date.now();
+            });
+        }, 3000);
     </script>
 </body>
 </html>

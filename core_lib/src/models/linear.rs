@@ -30,18 +30,6 @@ impl LinearModel {
         let model: LinearModel = serde_json::from_str(&content)?;
         Ok(model)
     }
-
-    pub fn save_binary(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let encoded = bincode::serialize(self)?;
-        std::fs::write(path, encoded)?;
-        Ok(())
-    }
-
-    pub fn load_binary(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data = std::fs::read(path)?;
-        let model: LinearModel = bincode::deserialize(&data)?;
-        Ok(model)
-    }
 }
 
 impl Model for LinearModel {

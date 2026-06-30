@@ -1,7 +1,6 @@
 use crate::math::activations::{Activation, softmax};
 use crate::math::vector::Vector;
 use crate::optim::gradient_descent::GradientDescentConfig;
-use crate::optim::optimizer::Optimizer;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -130,75 +129,6 @@ impl MLP {
         }
     }
 
-    // offsets stables des parametres par couche (poids + biais)
-    fn layer_param_bases(&self) -> Vec<usize> {
-        let mut bases = vec![0usize];
-        for layer in &self.layers {
-            let last = *bases.last().unwrap();
-            bases.push(last + layer.output_size * (layer.input_size + 1));
-        }
-        bases
-    }
-
-    // backprop en delegant les mises a jour des poids a un optimiseur externe
-    pub fn train_with_optimizer<O: Optimizer>(
-        &mut self,
-        inputs: &[Vector],
-        targets: &[Vector],
-        epochs: usize,
-        optimizer: &mut O,
-    ) {
-        let bases = self.layer_param_bases();
-        for _epoch in 0..epochs {
-            for (input, target) in inputs.iter().zip(targets.iter()) {
-                let mut zs = Vec::new();
-                let mut activations = vec![input.clone()];
-                for (i, layer) in self.layers.iter().enumerate() {
-                    let z = layer.forward(activations.last().unwrap());
-                    zs.push(z.clone());
-                    let a = if i == self.layers.len() - 1 {
-                        softmax(&z)
-                    } else {
-                        self.hidden_activation.apply(&z)
-                    };
-                    activations.push(a);
-                }
-                let output = activations.last().unwrap();
-                let mut delta = output.sub(target);
-                for l in (0..self.layers.len()).rev() {
-                    let a_prev = activations[l].clone();
-                    let base = bases[l];
-                    let in_size = self.layers[l].input_size;
-                    for i in 0..self.layers[l].output_size {
-                        for j in 0..in_size {
-                            let idx = base + i * (in_size + 1) + j;
-                            let grad = delta.data[i] * a_prev.data[j];
-                            self.layers[l].weights[i].data[j] =
-                                optimizer.update(idx, self.layers[l].weights[i].data[j], grad);
-                        }
-                        let bias_idx = base + i * (in_size + 1) + in_size;
-                        self.layers[l].biases.data[i] = optimizer.update(
-                            bias_idx,
-                            self.layers[l].biases.data[i],
-                            delta.data[i],
-                        );
-                    }
-                    if l > 0 {
-                        let mut new_delta = Vector::new(in_size);
-                        for j in 0..in_size {
-                            for i in 0..self.layers[l].output_size {
-                                new_delta.data[j] +=
-                                    self.layers[l].weights[i].data[j] * delta.data[i];
-                            }
-                        }
-                        let rd = self.hidden_activation.derivative(&zs[l - 1]);
-                        delta = new_delta.hadamard(&rd);
-                    }
-                }
-            }
-        }
-    }
-
     /// Sauvegarde le modele au format JSON
     pub fn save_json(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json = serde_json::to_string_pretty(self)?;
@@ -210,20 +140,6 @@ impl MLP {
     pub fn load_json(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         let model: MLP = serde_json::from_str(&content)?;
-        Ok(model)
-    }
-
-    /// Sauvegarde le modele au format binaire (bincode)
-    pub fn save_binary(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let encoded = bincode::serialize(self)?;
-        std::fs::write(path, encoded)?;
-        Ok(())
-    }
-
-    /// Charge un modele depuis un fichier binaire
-    pub fn load_binary(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data = std::fs::read(path)?;
-        let model: MLP = bincode::deserialize(&data)?;
         Ok(model)
     }
 }

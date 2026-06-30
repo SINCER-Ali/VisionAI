@@ -1,3 +1,4 @@
+use core_lib::math::activations::Activation;
 use core_lib::math::matrix::Matrix as CoreMatrix;
 use core_lib::math::vector::Vector as CoreVector;
 use core_lib::models::linear::LinearModel;
@@ -256,17 +257,16 @@ struct PySVM {
 
 #[pymethods]
 impl PySVM {
-    /// kernel : "linear" | "rbf" | "poly"
+    /// kernel : "linear" | "rbf"
     #[new]
-    #[pyo3(signature = (c=1.0, kernel="linear", gamma=1.0, degree=3, coef0=1.0))]
-    fn new(c: f64, kernel: &str, gamma: f64, degree: usize, coef0: f64) -> PyResult<Self> {
+    #[pyo3(signature = (c=1.0, kernel="linear", gamma=1.0))]
+    fn new(c: f64, kernel: &str, gamma: f64) -> PyResult<Self> {
         let model = match kernel {
             "linear" => SVM::new_linear(c),
             "rbf" => SVM::new_kernel(c, KernelType::RBF { gamma }),
-            "poly" | "polynomial" => SVM::new_kernel(c, KernelType::Polynomial { degree, coef0 }),
             other => {
                 return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                    "kernel inconnu '{other}' (attendu : linear | rbf | poly)"
+                    "kernel inconnu '{other}' (attendu : linear | rbf)"
                 )));
             }
         };
@@ -320,9 +320,15 @@ struct PyMLP {
 #[pymethods]
 impl PyMLP {
     #[new]
-    fn new(layer_sizes: Vec<usize>) -> Self {
+    #[pyo3(signature = (layer_sizes, activation=None))]
+    fn new(layer_sizes: Vec<usize>, activation: Option<String>) -> Self {
+        let act = match activation.as_deref() {
+            Some("sigmoid") => Activation::Sigmoid,
+            Some("tanh") => Activation::Tanh,
+            _ => Activation::ReLU,
+        };
         Self {
-            model: MLP::new(&layer_sizes),
+            model: MLP::new(&layer_sizes).with_activation(act),
         }
     }
 
@@ -385,7 +391,7 @@ fn create_model(
                 .get_item("layer_sizes")?
                 .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("layer_sizes"))?
                 .extract()?;
-            Ok(Py::new(py, PyMLP::new(layer_sizes))?.into_any())
+            Ok(Py::new(py, PyMLP::new(layer_sizes, None))?.into_any())
         }
         _ => Err(pyo3::exceptions::PyValueError::new_err(
             "unknown model_type",

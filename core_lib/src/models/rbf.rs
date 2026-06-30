@@ -218,15 +218,6 @@ impl RBF {
         let content = std::fs::read_to_string(path)?;
         Ok(serde_json::from_str(&content)?)
     }
-    pub fn save_binary(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let encoded = bincode::serialize(self)?;
-        std::fs::write(path, encoded)?;
-        Ok(())
-    }
-    pub fn load_binary(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let data = std::fs::read(path)?;
-        Ok(bincode::deserialize(&data)?)
-    }
 }
 
 #[cfg(test)]
@@ -321,24 +312,5 @@ mod tests {
             assert!((a - b).abs() < 1e-10);
         }
         std::fs::remove_file("__rbf_test.json").ok();
-    }
-
-    #[test]
-    fn rbf_binary_roundtrip() {
-        let (inputs, targets) = xor_data();
-        let mut rbf = RBF::new(4, 1.0, 2);
-        rbf.train(
-            &inputs,
-            &targets,
-            GradientDescentConfig { lr: 0.0, epochs: 0 },
-        );
-        rbf.save_binary("__rbf_test.bin").unwrap();
-        let loaded = RBF::load_binary("__rbf_test.bin").unwrap();
-        let out_orig = rbf.predict(&inputs[0]);
-        let out_load = loaded.predict(&inputs[0]);
-        for (a, b) in out_orig.data.iter().zip(out_load.data.iter()) {
-            assert!((a - b).abs() < 1e-10);
-        }
-        std::fs::remove_file("__rbf_test.bin").ok();
     }
 }
