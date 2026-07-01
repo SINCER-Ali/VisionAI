@@ -1,0 +1,13 @@
+# Auteur : Valentin BROUC
+# Fichier de configuration du paquet Rust
+
+[package]
+name = "lib_rust"            # Nom du paquet -> produira lib_rust.dll (Windows) / liblib_rust.so (Linux).
+version = "0.1.0"            # Numero de version du projet.
+edition = "2021"             # Version du langage Rust utilisee (l'edition moderne standard).
+
+[lib]                        
+crate-type = ["cdylib"]      # LIGNE CLE : produit une bibliotheque dynamique compatible C, chargeable par Python (ctypes).
+
+[dependencies]               
+rand = "0.8"                 # Generateur de nombres aleatoires (simple utilitaire pour initialiser les poids, PAS une lib de ML).
