@@ -26,7 +26,7 @@ targets_train = [[1.0 if int(l) == k else 0.0 for k in range(3)] for l in y_trai
 
 print("Entrainement du MLP...")
 modele = vision_ai.PyMLP([INPUT_SIZE, 64, 3], "sigmoid")
-modele.train(inputs_train, targets_train, 0.01, 400)
+modele.train(inputs_train, targets_train, 0.005, 60)
 
 os.makedirs("models", exist_ok=True)
 modele.save_json("models/mlp_weights.json")
