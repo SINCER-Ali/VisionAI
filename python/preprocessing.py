@@ -23,6 +23,13 @@ EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
 np.random.seed(42)                        # decoupage reproductible
 
 
+def image_to_vector(chemin, taille=TAILLE):
+    """UNE image -> un vecteur de taille*taille*3 valeurs dans [0,1].
+    Utilisee ici (dataset) ET par l'API (image envoyee par l'utilisateur)."""
+    img = Image.open(chemin).convert("RGB").resize((taille, taille))  # RGB + redimension
+    return np.asarray(img, dtype=np.float64).ravel() / 255.0          # aplati + normalise
+
+
 def charger_images():
     """Parcourt les dossiers et renvoie X (images aplaties) et y (etiquettes)."""
     X, y = [], []
@@ -33,11 +40,10 @@ def charger_images():
         for nom in fichiers:
             chemin = os.path.join(dossier_classe, nom)
             try:
-                img = Image.open(chemin).convert("RGB").resize((TAILLE, TAILLE))
+                X.append(image_to_vector(chemin))  # meme conversion que l'API
             except Exception as e:
                 print(f"    /!\\ image ignoree ({nom}) : {e}")
                 continue
-            X.append(np.asarray(img, dtype=np.float64).ravel() / 255.0)  # aplatie + normalisee
             y.append(etiquette)
     return np.array(X), np.array(y)
 

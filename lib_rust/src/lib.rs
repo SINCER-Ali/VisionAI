@@ -73,6 +73,28 @@ pub extern "C" fn mlp_predict(
 }
 
 // ---------------------------------------------------------------------
+//  mlp_export_weights : recopie tous les poids a plat dans out_ptr.
+//  (Python les recupere puis les sauvegarde en JSON.)
+// ---------------------------------------------------------------------
+#[no_mangle]
+pub extern "C" fn mlp_export_weights(model_ptr: *mut MLP, out_ptr: *mut f64, len: usize) {
+    let model = unsafe { &*model_ptr };
+    let out = unsafe { slice::from_raw_parts_mut(out_ptr, len) };
+    model.export_weights(out);
+}
+
+// ---------------------------------------------------------------------
+//  mlp_import_weights : recharge les poids a plat depuis in_ptr.
+//  (Python lit le JSON puis renvoie les poids ici.)
+// ---------------------------------------------------------------------
+#[no_mangle]
+pub extern "C" fn mlp_import_weights(model_ptr: *mut MLP, in_ptr: *const f64, len: usize) {
+    let model = unsafe { &mut *model_ptr };
+    let inp = unsafe { slice::from_raw_parts(in_ptr, len) };
+    model.import_weights(inp);
+}
+
+// ---------------------------------------------------------------------
 //  mlp_destroy : libere la memoire du reseau (appele depuis Python a la fin).
 // ---------------------------------------------------------------------
 #[no_mangle]

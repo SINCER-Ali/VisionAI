@@ -4,6 +4,8 @@
 import ctypes    # module pour appeler du code compile (C/Rust)
 import os        # pour construire le chemin du fichier compile
 import platform  # pour detecter le systeme d'exploitation
+import json      # sauvegarde/chargement au format JSON (lisible)
+import array     # sauvegarde/chargement au format BINAIRE (compact)
 
 # --- Trouver et charger la bibliothèque partagée Rust ---
 _dossier = os.path.dirname(__file__)  # dossier de ce script (python/)
@@ -26,8 +28,9 @@ lib = ctypes.CDLL(_chemin)             # on charge la DLL compilée
 lib.mlp_create.argtypes = [ctypes.POINTER(ctypes.c_size_t), ctypes.c_size_t, ctypes.c_size_t]
 lib.mlp_create.restype = ctypes.c_void_p                                       # pointeur (ticket)
 
-# Correspondance nom d'activation -> code envoye au Rust
+# Correspondance nom d'activation -> code envoye au Rust (et l'inverse pour le chargement)
 _ACTIVATIONS = {"tanh": 0, "sigmoid": 1, "relu": 2}
+_ACTIVATIONS_INV = {v: k for k, v in _ACTIVATIONS.items()}  # code -> nom
 
 lib.mlp_train.argtypes = [
     ctypes.c_void_p,                  # pointeur vers le modèle
@@ -54,6 +57,12 @@ lib.mlp_predict.restype = None
 
 lib.mlp_destroy.argtypes = [ctypes.c_void_p]
 lib.mlp_destroy.restype = None
+
+# export / import des poids (pour sauvegarder/charger un modele)
+lib.mlp_export_weights.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+lib.mlp_export_weights.restype = None
+lib.mlp_import_weights.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+lib.mlp_import_weights.restype = None
 
 
 class MLP:
@@ -85,6 +94,68 @@ class MLP:
         out = (ctypes.c_double * self.n_outputs)()      # tampon de sortie vide
         lib.mlp_predict(self._ptr, x_c, self.n_inputs, out, self.n_outputs, is_classification)
         return list(out)                                # renvoie la liste des sorties
+
+    # ------- Sauvegarde / chargement du modele (sur disque, en JSON) -------
+    def _nb_poids(self):
+        # nombre total de poids = somme sur chaque couche de (d[l-1]+1) x (d[l]+1)
+        npl = self.npl
+        return sum((npl[l - 1] + 1) * (npl[l] + 1) for l in range(1, len(npl)))
+
+    def get_weights(self):
+        """Recupere tous les poids du modele (liste plate de float)."""
+        n = self._nb_poids()
+        buf = (ctypes.c_double * n)()
+        lib.mlp_export_weights(self._ptr, buf, n)
+        return list(buf)
+
+    def set_weights(self, poids):
+        """Remet des poids dans le modele (liste plate de float)."""
+        buf = (ctypes.c_double * len(poids))(*poids)
+        lib.mlp_import_weights(self._ptr, buf, len(poids))
+
+    # --- Format JSON : lisible (on peut ouvrir le fichier), mais lourd ---
+    def save_json(self, chemin):
+        """Sauvegarde le modele (archi + activation + poids) en JSON."""
+        data = {"npl": self.npl, "activation": self.activation, "poids": self.get_weights()}
+        with open(chemin, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+    @staticmethod
+    def load_json(chemin):
+        """Recree un MLP a partir d'un fichier JSON."""
+        with open(chemin, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        m = MLP(data["npl"], activation=data.get("activation", "tanh"))
+        m.set_weights(data["poids"])                    # on remet les poids appris
+        return m
+
+    # --- Format BINAIRE : compact et rapide (octets bruts, non lisible) ---
+    def save_binary(self, chemin):
+        """Sauvegarde le modele en binaire : entete (archi + activation) puis les poids."""
+        code = _ACTIVATIONS.get(self.activation, 0)
+        entete = array.array("i", [len(self.npl)] + list(self.npl) + [code])  # entiers 32 bits
+        poids = array.array("d", self.get_weights())                          # doubles 64 bits
+        with open(chemin, "wb") as f:
+            entete.tofile(f)                            # on ecrit l'entete
+            poids.tofile(f)                             # puis tous les poids
+
+    @staticmethod
+    def load_binary(chemin):
+        """Recree un MLP a partir d'un fichier binaire."""
+        with open(chemin, "rb") as f:
+            nlen = array.array("i"); nlen.fromfile(f, 1)          # combien de couches
+            npl = array.array("i"); npl.fromfile(f, nlen[0])      # les tailles de couches
+            code = array.array("i"); code.fromfile(f, 1)          # le code d'activation
+            npl = list(npl)
+            nb = sum((npl[l - 1] + 1) * (npl[l] + 1) for l in range(1, len(npl)))  # nb de poids
+            poids = array.array("d"); poids.fromfile(f, nb)       # les poids
+        m = MLP(npl, activation=_ACTIVATIONS_INV.get(code[0], "tanh"))
+        m.set_weights(list(poids))
+        return m
+
+    # Alias pratiques : save/load = format JSON par defaut
+    save = save_json
+    load = load_json
 
     def __del__(self):
         if getattr(self, "_ptr", None):

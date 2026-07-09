@@ -138,6 +138,39 @@ impl MLP {                                         // bloc des methodes du MLP
     }                                               // fin de propagate
 
     // -----------------------------------------------------------------
+    //  EXPORT des poids : recopie tous les poids w[l][i][j] a plat dans `out`.
+    //  Ordre : couche l (1..L), neurone i (0..d[l-1]), neurone j (0..d[l]).
+    //  Sert a SAUVEGARDER le modele (cote Python : get_weights -> JSON).
+    // -----------------------------------------------------------------
+    pub fn export_weights(&self, out: &mut [f64]) {
+        let mut k = 0;                                  // position dans le tableau plat
+        for layer in 1..=self.l {                       // pour chaque couche
+            for i in 0..=self.d[layer - 1] {            // chaque neurone de depart (0 = biais)
+                for j in 0..=self.d[layer] {            // chaque neurone d'arrivee
+                    out[k] = self.w[layer][i][j];       // recopie le poids
+                    k += 1;
+                }
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------
+    //  IMPORT des poids : remet les poids a plat de `inp` dans w[l][i][j].
+    //  MEME ordre que export_weights. Sert a CHARGER un modele sauvegarde.
+    // -----------------------------------------------------------------
+    pub fn import_weights(&mut self, inp: &[f64]) {
+        let mut k = 0;
+        for layer in 1..=self.l {
+            for i in 0..=self.d[layer - 1] {
+                for j in 0..=self.d[layer] {
+                    self.w[layer][i][j] = inp[k];       // remet le poids
+                    k += 1;
+                }
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------
     //  PREDICTION : propage puis renvoie la couche de sortie.
     // -----------------------------------------------------------------
     pub fn predict(&mut self, inputs: &[f64], is_classification: bool) -> Vec<f64> { // predit une entree

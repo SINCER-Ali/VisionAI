@@ -55,6 +55,12 @@ if __name__ == "__main__":
     print("Entrainement en cours...")
     model.fit(X_train, Y_train, steps=STEPS, lr=LR, is_classification=True)
 
+    # Sauvegarde du modele entraine (2 formats) -> l'API le chargera sans re-entrainer.
+    dossier = os.path.join(os.path.dirname(__file__), "..", "models")
+    model.save_json(os.path.join(dossier, "mlp_weights.json"))    # lisible
+    model.save_binary(os.path.join(dossier, "mlp_weights.bin"))   # compact
+    print("Modele sauvegarde dans models/ (JSON + binaire)")
+
     acc_train = precision(model, X_train, y_train)
     acc_test = precision(model, X_test, y_test)
     print(f"\nPrecision entrainement : {acc_train:.1f}%")
