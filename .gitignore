@@ -1,0 +1,37 @@
+
+# ---------------------- Rust ----------------------
+# Dossier de compilation, regenere par `cargo build` -> ne JAMAIS versionner
+target/
+# (Cargo.lock est garde : il fige les versions des dependances)
+
+# ---------------------- Python ----------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+ENV/
+
+# ---------------------- Jupyter ----------------------
+.ipynb_checkpoints/
+
+# ---------------------- IDE / editeurs ----------------------
+.idea/
+.vscode/
+*.iml
+
+# ---------------------- Systeme ----------------------
+.DS_Store
+Thumbs.db
+
+# ---------------------- Claude Code (config locale perso) ----------------------
+.claude/settings.local.json
+
+# ---------------------- Donnees (images + .npy) ----------------------
+# Les images/datasets sont souvent lourds. Decommente la ligne suivante
+# si tu ne veux PAS versionner le dataset (il vit alors sur Drive/local) :
+# datasets/
