@@ -1,100 +1,152 @@
-// Auteur : Valentin BROUC
-// Facade "C" expose le modèle linéaire pour l'utiliser depuis du code C
+// Auteurs : Valentin BROUC (lineaire, SVM) & Nina (MLP)
+// Facade "C" : expose les modeles pour les utiliser depuis Python (ctypes).
 
-mod linear; // Importe le module linear.rs
-use linear::LinearModel; // Utilise la structure LinearModel du module linear.rs
-use std::slice; // Importe le module slice pour manipuler des pointeurs et des slices
+use std::slice;
 
-#[no_mangle] // Indique au compilateur de ne pas modifier le nom de la fonction pour l'exporter
+// ===================== MODELE LINEAIRE (Valentin BROUC) =====================
+mod linear;
+use linear::LinearModel;
+
+#[no_mangle]
 pub extern "C" fn linear_create(input_dim: usize) -> *mut LinearModel {
-    // Crée un modèle linéaire et retourne un pointeur vers celui-ci
-    Box::into_raw(Box::new(LinearModel::new(input_dim))) // Place le modele dans un Box (allocation sur le tas) et retourne un pointeur brut vers celui-ci
-} // Fin de la fonction linear_create
-
-#[no_mangle] // Indique au compilateur de ne pas modifier le nom de la fonction pour l'exporter
-pub extern "C" fn linear_train(
-    // Entraine le modèle linéaire sur un ensemble d'exemples
-    model_ptr: *mut LinearModel, // Pointeur vers le modèle linéaire à entraîner
-    x_ptr: *const f64, // Pointeur vers le tableau contenant toutes les entrées (chaque entrée est un vecteur aplati)
-    y_ptr: *const f64, // Pointeur vers le tableau contenant toutes les classes attendues (1 ou -1) pour chaque entrée correspondante
-    n_samples: usize,  // Nombre d'exemples d'apprentissage
-    input_dim: usize,  // Taille d'un exemple (nombre d'entrées)
-    lr: f64,           // Taux d'apprentissage (learning rate) pour la mise à jour des poids
-    epochs: usize,     // Nombre d'itérations sur l'ensemble des exemples pour l'apprentissage
-) {
-    let model = unsafe { &mut *model_ptr }; // Récupère depuis le pointeur brut le modèle linéaire (unsafe car on manipule des pointeurs bruts)
-    let all_x = unsafe { slice::from_raw_parts(x_ptr, n_samples * input_dim) }; // Reconstruit le tableau des entrées à partir du pointeur brut + sa longueur
-    let all_y = unsafe { slice::from_raw_parts(y_ptr, n_samples) }; // Reconstruit le tableau des classes attendues
-    model.train(all_x, all_y, n_samples, input_dim, lr, epochs); // Appelle la méthode train du modèle linéaire avec les données reconstruites
-} // Fin de la fonction linear_train
-
-#[no_mangle] // Indique au compilateur de ne pas modifier le nom de la fonction pour l'exporter
-pub extern "C" fn linear_predict(
-    model_ptr: *mut LinearModel,
-    x_ptr: *const f64,
-    input_dim: usize,
-) -> f64 {
-    // Prédit la classe d'un point
-    let model = unsafe { &*model_ptr }; // Récupère depuis le pointeur brut le modèle linéaire (unsafe car on manipule des pointeurs bruts)
-    let x = unsafe { slice::from_raw_parts(x_ptr, input_dim) }; // Reconstruit le tableau de l'entrée à partir du pointeur brut
-    model.predict_class(x) // Appelle la méthode predict_class du modèle linéaire avec l'entrée reconstruite et retourne la classe prédite
-} // fin de la fonction linear_predict
-
-#[no_mangle] // Indique au compilateur de ne pas modifier le nom de la fonction pour l'exporter
-pub extern "C" fn linear_destroy(model_ptr: *mut LinearModel) {
-    // Détruit la mémoire du modele quand Python a fini
-    if !model_ptr.is_null() {
-        // Vérifie que le pointeur n'est pas nul pour éviter les erreurs de segmentation
-        unsafe { drop(Box::from_raw(model_ptr)) }; // Libère la mémoire du modèle linéaire (unsafe car on manipule des pointeurs bruts)
-    } // fin de la vérification du pointeur nul
-} // fin de la fonction linear_destroy
-
-// Auteur : Valentin BROUC
-// Facade "C" expose le modèle SVM pour l'utiliser depuis du code C
-
-mod svm; // Importe le module svm.rs
-use svm::SVMModel; // rend SVMModel utilisable ici
-
-
-#[no_mangle]
-pub extern "C" fn svm_create() -> *mut SVMModel { // créé un SVM vide et renvoi le "ticket"
-    Box::into_raw(Box::new(SVMModel::new())) // place le modèle en mémoire et renvoi l'adresse
-} // fin de svm_create
-
-#[no_mangle]
-pub extern "C" fn svm_train(
-    model_ptr: *mut SVMModel, // Pointeur vers le modèle SVM à entraîner
-    x_ptr: *const f64, // Pointeur vers le tableau contenant toutes les entrées (chaque entrée est un vecteur aplati)
-    y_ptr: *const f64, // Pointeur vers le tableau contenant toutes les classes attendues (1 ou -1) pour chaque entrée correspondante
-    n_samples: usize,  // Nombre d'exemples d'apprentissage
-    input_dim: usize,  // Taille d'un exemple (nombre d'entrées)
-    lr: f64,           // Taux d'apprentissage (learning rate) pour la mise à jour des alphas
-    epochs: usize,     // Nombre d'itérations sur l'ensemble des exemples pour l'apprentissage
-    gamma: f64,        // Paramètre du noyau RBF ; si <= 0 -> noyau linéaire
-) {
-    let model = unsafe { &mut *model_ptr }; // Récupère depuis le pointeur brut le modèle SVM
-    let all_x = unsafe { slice::from_raw_parts(x_ptr, n_samples * input_dim) }; // Reconstruit le tableau des entrées à partir du pointeur brut + sa longueur
-    let all_y = unsafe { slice::from_raw_parts(y_ptr, n_samples) }; // Reconstruit le tableau des classes attendues
-    model.train(all_x, all_y, n_samples, input_dim, lr, epochs, gamma); // Appelle la méthode train du modèle SVM avec les données reconstruites
+    Box::into_raw(Box::new(LinearModel::new(input_dim)))
 }
 
 #[no_mangle]
-pub extern "C" fn svm_predict(
+pub extern "C" fn linear_train(
+    model_ptr: *mut LinearModel,
+    x_ptr: *const f64,
+    y_ptr: *const f64,
+    n_samples: usize,
+    input_dim: usize,
+    lr: f64,
+    epochs: usize,
+) {
+    let model = unsafe { &mut *model_ptr };
+    let all_x = unsafe { slice::from_raw_parts(x_ptr, n_samples * input_dim) };
+    let all_y = unsafe { slice::from_raw_parts(y_ptr, n_samples) };
+    model.train(all_x, all_y, n_samples, input_dim, lr, epochs);
+}
+
+#[no_mangle]
+pub extern "C" fn linear_predict(model_ptr: *mut LinearModel, x_ptr: *const f64, input_dim: usize) -> f64 {
+    let model = unsafe { &*model_ptr };
+    let x = unsafe { slice::from_raw_parts(x_ptr, input_dim) };
+    model.predict_class(x)
+}
+
+#[no_mangle]
+pub extern "C" fn linear_destroy(model_ptr: *mut LinearModel) {
+    if !model_ptr.is_null() {
+        unsafe { drop(Box::from_raw(model_ptr)) };
+    }
+}
+
+// ===================== MODELE SVM (Valentin BROUC) =====================
+mod svm;
+use svm::SVMModel;
+
+#[no_mangle]
+pub extern "C" fn svm_create() -> *mut SVMModel {
+    Box::into_raw(Box::new(SVMModel::new()))
+}
+
+#[no_mangle]
+pub extern "C" fn svm_train(
     model_ptr: *mut SVMModel,
     x_ptr: *const f64,
+    y_ptr: *const f64,
+    n_samples: usize,
     input_dim: usize,
-) -> f64 {
-    // Prédit la classe d'un point avec le modèle SVM
-    let model = unsafe { &*model_ptr }; // Récupère depuis le pointeur brut le modèle SVM
-    let x = unsafe { slice::from_raw_parts(x_ptr, input_dim) }; // Reconstruit le tableau de l'entrée à partir du pointeur brut
-    model.predict_class(x) // Appelle la méthode predict_class du modèle SVM avec l'entrée reconstruite et retourne la classe prédite
+    lr: f64,
+    epochs: usize,
+    gamma: f64,
+) {
+    let model = unsafe { &mut *model_ptr };
+    let all_x = unsafe { slice::from_raw_parts(x_ptr, n_samples * input_dim) };
+    let all_y = unsafe { slice::from_raw_parts(y_ptr, n_samples) };
+    model.train(all_x, all_y, n_samples, input_dim, lr, epochs, gamma);
+}
+
+#[no_mangle]
+pub extern "C" fn svm_predict(model_ptr: *mut SVMModel, x_ptr: *const f64, input_dim: usize) -> f64 {
+    let model = unsafe { &*model_ptr };
+    let x = unsafe { slice::from_raw_parts(x_ptr, input_dim) };
+    model.predict_class(x)
 }
 
 #[no_mangle]
 pub extern "C" fn svm_destroy(model_ptr: *mut SVMModel) {
-    // Détruit la mémoire du modèle SVM quand Python a fini
     if !model_ptr.is_null() {
-        // Vérifie que le pointeur n'est pas nul pour éviter les erreurs de segmentation
-        unsafe { drop(Box::from_raw(model_ptr)) }; // Libère la mémoire du modèle SVM (unsafe car on manipule des pointeurs bruts)
-    } // fin de la vérification du pointeur nul
-} // fin de la fonction svm_destroy
+        unsafe { drop(Box::from_raw(model_ptr)) };
+    }
+}
+
+// ===================== MODELE MLP / PMC (Nina) =====================
+mod mlp;
+use mlp::MLP;
+
+#[no_mangle]
+pub extern "C" fn mlp_create(npl_ptr: *const usize, npl_len: usize, activation_code: usize) -> *mut MLP {
+    let npl = unsafe { slice::from_raw_parts(npl_ptr, npl_len) };
+    Box::into_raw(Box::new(MLP::new(npl, activation_code)))
+}
+
+#[no_mangle]
+pub extern "C" fn mlp_train(
+    model_ptr: *mut MLP,
+    x_ptr: *const f64,
+    y_ptr: *const f64,
+    n_samples: usize,
+    n_inputs: usize,
+    n_outputs: usize,
+    steps: usize,
+    learning_rate: f64,
+    is_classification: bool,
+) {
+    let model = unsafe { &mut *model_ptr };
+    let x_flat = unsafe { slice::from_raw_parts(x_ptr, n_samples * n_inputs) };
+    let y_flat = unsafe { slice::from_raw_parts(y_ptr, n_samples * n_outputs) };
+    let inputs: Vec<Vec<f64>> = x_flat.chunks(n_inputs).map(|c| c.to_vec()).collect();
+    let outputs: Vec<Vec<f64>> = y_flat.chunks(n_outputs).map(|c| c.to_vec()).collect();
+    model.train(&inputs, &outputs, steps, learning_rate, is_classification);
+}
+
+#[no_mangle]
+pub extern "C" fn mlp_predict(
+    model_ptr: *mut MLP,
+    x_ptr: *const f64,
+    n_inputs: usize,
+    out_ptr: *mut f64,
+    n_outputs: usize,
+    is_classification: bool,
+) {
+    let model = unsafe { &mut *model_ptr };
+    let inputs = unsafe { slice::from_raw_parts(x_ptr, n_inputs) };
+    let pred = model.predict(inputs, is_classification);
+    let out = unsafe { slice::from_raw_parts_mut(out_ptr, n_outputs) };
+    for i in 0..n_outputs {
+        out[i] = pred[i];
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn mlp_export_weights(model_ptr: *mut MLP, out_ptr: *mut f64, len: usize) {
+    let model = unsafe { &*model_ptr };
+    let out = unsafe { slice::from_raw_parts_mut(out_ptr, len) };
+    model.export_weights(out);
+}
+
+#[no_mangle]
+pub extern "C" fn mlp_import_weights(model_ptr: *mut MLP, in_ptr: *const f64, len: usize) {
+    let model = unsafe { &mut *model_ptr };
+    let inp = unsafe { slice::from_raw_parts(in_ptr, len) };
+    model.import_weights(inp);
+}
+
+#[no_mangle]
+pub extern "C" fn mlp_destroy(model_ptr: *mut MLP) {
+    if !model_ptr.is_null() {
+        unsafe { drop(Box::from_raw(model_ptr)) };
+    }
+}

@@ -69,3 +69,4 @@ impl LinearModel {
         } // Fin de la boucle sur les epochs
     } // Fin de la méthode train
 } // Fin de l'implémentation du modèle linéaire
+
