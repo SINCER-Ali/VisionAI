@@ -153,4 +153,21 @@ impl RBFNetwork {
         if self.predict(x) >= 0.0 { 1.0 } else { -1.0 } // si positif cest +1 sinon -1
     }
 
+    // pour sauvegarder / recharger le modele
+    pub fn gamma(&self) -> f64 { self.gamma }
+    pub fn nb_centres(&self) -> usize { self.centers.len() }
+    pub fn taille_centre(&self) -> usize {
+        if self.centers.is_empty() { 0 } else { self.centers[0].len() }
+    }
+    pub fn centres_plat(&self) -> Vec<f64> {
+        self.centers.iter().flatten().copied().collect() // centres mis bout a bout
+    }
+    pub fn poids(&self) -> Vec<f64> { self.weights.clone() }
+
+    // reconstruit un modele deja appris (sans relancer l'entrainement)
+    pub fn depuis_params(centres: &[f64], nb: usize, taille: usize, poids: &[f64], gamma: f64) -> Self {
+        let centers = centres.chunks(taille).map(|c| c.to_vec()).take(nb).collect();
+        RBFNetwork { centers, weights: poids.to_vec(), gamma }
+    }
+
 }
