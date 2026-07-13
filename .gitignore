@@ -1,4 +1,3 @@
-
 # ---------------------- Rust ----------------------
 # Dossier de compilation, regenere par `cargo build` -> ne JAMAIS versionner
 target/
@@ -32,6 +31,4 @@ Thumbs.db
 .claude/settings.local.json
 
 # ---------------------- Donnees (images + .npy) ----------------------
-# Les images/datasets sont souvent lourds. Decommente la ligne suivante
-# si tu ne veux PAS versionner le dataset (il vit alors sur Drive/local) :
 # datasets/

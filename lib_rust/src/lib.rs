@@ -1,66 +1,124 @@
-// Auteur : Nina
-// Facade "C" : expose le MLP pour l'utiliser depuis Python (ctypes).
-//
-// NOTE : on ne declare ici que `mod mlp;`. Les autres modeles
-// (linear, svm, rbf) sont geres par les coequipiers sur leurs branches ;
-// on ne les compile pas ici pour rester concentre sur le MLP.
+// Auteurs : Valentin BROUC (lineaire, SVM) & Nina (MLP)
+// Facade "C" : expose les modeles pour les utiliser depuis Python (ctypes).
 
-use std::slice; // pour reconstruire des slices a partir de pointeurs bruts
+use std::slice;
 
-mod mlp; // Importe le module mlp.rs
-use mlp::MLP; // Utilise la structure MLP du module mlp.rs
+// ===================== MODELE LINEAIRE (Valentin BROUC) =====================
+mod linear;
+use linear::LinearModel;
 
-// ---------------------------------------------------------------------
-//  mlp_create : cree un MLP a partir des tailles de couches (ex. [2,2,1]).
-//  Renvoie un pointeur ("ticket") que Python garde et repasse ensuite.
-// ---------------------------------------------------------------------
 #[no_mangle]
-pub extern "C" fn mlp_create(
-    npl_ptr: *const usize,
-    npl_len: usize,
-    activation_code: usize, // 0 = tanh, 1 = sigmoid, 2 = relu
-) -> *mut MLP {
+pub extern "C" fn linear_create(input_dim: usize) -> *mut LinearModel {
+    Box::into_raw(Box::new(LinearModel::new(input_dim)))
+}
+
+#[no_mangle]
+pub extern "C" fn linear_train(
+    model_ptr: *mut LinearModel,
+    x_ptr: *const f64,
+    y_ptr: *const f64,
+    n_samples: usize,
+    input_dim: usize,
+    lr: f64,
+    epochs: usize,
+) {
+    let model = unsafe { &mut *model_ptr };
+    let all_x = unsafe { slice::from_raw_parts(x_ptr, n_samples * input_dim) };
+    let all_y = unsafe { slice::from_raw_parts(y_ptr, n_samples) };
+    model.train(all_x, all_y, n_samples, input_dim, lr, epochs);
+}
+
+#[no_mangle]
+pub extern "C" fn linear_predict(model_ptr: *mut LinearModel, x_ptr: *const f64, input_dim: usize) -> f64 {
+    let model = unsafe { &*model_ptr };
+    let x = unsafe { slice::from_raw_parts(x_ptr, input_dim) };
+    model.predict_class(x)
+}
+
+#[no_mangle]
+pub extern "C" fn linear_destroy(model_ptr: *mut LinearModel) {
+    if !model_ptr.is_null() {
+        unsafe { drop(Box::from_raw(model_ptr)) };
+    }
+}
+
+// ===================== MODELE SVM (Valentin BROUC) =====================
+mod svm;
+use svm::SVMModel;
+
+#[no_mangle]
+pub extern "C" fn svm_create() -> *mut SVMModel {
+    Box::into_raw(Box::new(SVMModel::new()))
+}
+
+#[no_mangle]
+pub extern "C" fn svm_train(
+    model_ptr: *mut SVMModel,
+    x_ptr: *const f64,
+    y_ptr: *const f64,
+    n_samples: usize,
+    input_dim: usize,
+    lr: f64,
+    epochs: usize,
+    gamma: f64,
+) {
+    let model = unsafe { &mut *model_ptr };
+    let all_x = unsafe { slice::from_raw_parts(x_ptr, n_samples * input_dim) };
+    let all_y = unsafe { slice::from_raw_parts(y_ptr, n_samples) };
+    model.train(all_x, all_y, n_samples, input_dim, lr, epochs, gamma);
+}
+
+#[no_mangle]
+pub extern "C" fn svm_predict(model_ptr: *mut SVMModel, x_ptr: *const f64, input_dim: usize) -> f64 {
+    let model = unsafe { &*model_ptr };
+    let x = unsafe { slice::from_raw_parts(x_ptr, input_dim) };
+    model.predict_class(x)
+}
+
+#[no_mangle]
+pub extern "C" fn svm_destroy(model_ptr: *mut SVMModel) {
+    if !model_ptr.is_null() {
+        unsafe { drop(Box::from_raw(model_ptr)) };
+    }
+}
+
+// ===================== MODELE MLP / PMC (Nina) =====================
+mod mlp;
+use mlp::MLP;
+
+#[no_mangle]
+pub extern "C" fn mlp_create(npl_ptr: *const usize, npl_len: usize, activation_code: usize) -> *mut MLP {
     let npl = unsafe { slice::from_raw_parts(npl_ptr, npl_len) };
     Box::into_raw(Box::new(MLP::new(npl, activation_code)))
 }
 
-// ---------------------------------------------------------------------
-//  mlp_train : entraine le reseau.
-//  x_ptr / y_ptr sont les donnees APLATIES (lues ligne par ligne).
-// ---------------------------------------------------------------------
 #[no_mangle]
 pub extern "C" fn mlp_train(
     model_ptr: *mut MLP,
-    x_ptr: *const f64,        // toutes les entrées aplaties
-    y_ptr: *const f64,        // toutes les sorties attendues aplaties
-    n_samples: usize,         // nombre d'exemples
-    n_inputs: usize,          // taille d'une entrée
-    n_outputs: usize,         // taille d'une sortie
-    steps: usize,             // nombre d'itérations (tirages aléatoires)
+    x_ptr: *const f64,
+    y_ptr: *const f64,
+    n_samples: usize,
+    n_inputs: usize,
+    n_outputs: usize,
+    steps: usize,
     learning_rate: f64,
-    is_classification: bool,  // true = classification (tanh en sortie), false = régression
+    is_classification: bool,
 ) {
     let model = unsafe { &mut *model_ptr };
     let x_flat = unsafe { slice::from_raw_parts(x_ptr, n_samples * n_inputs) };
     let y_flat = unsafe { slice::from_raw_parts(y_ptr, n_samples * n_outputs) };
-    // On recoupe les tableaux plats en lignes.
     let inputs: Vec<Vec<f64>> = x_flat.chunks(n_inputs).map(|c| c.to_vec()).collect();
     let outputs: Vec<Vec<f64>> = y_flat.chunks(n_outputs).map(|c| c.to_vec()).collect();
     model.train(&inputs, &outputs, steps, learning_rate, is_classification);
 }
 
-// ---------------------------------------------------------------------
-//  mlp_predict : predit UN exemple. Le resultat est ecrit dans out_ptr
-//  (tampon de n_outputs cases alloue cote Python), car le MLP peut avoir
-//  plusieurs sorties (multi-classe / regression).
-// ---------------------------------------------------------------------
 #[no_mangle]
 pub extern "C" fn mlp_predict(
     model_ptr: *mut MLP,
-    x_ptr: *const f64,        // l'entrée
-    n_inputs: usize,          // taille de l'entrée
-    out_ptr: *mut f64,        // tampon de sortie (alloué côté Python)
-    n_outputs: usize,         // taille de la sortie
+    x_ptr: *const f64,
+    n_inputs: usize,
+    out_ptr: *mut f64,
+    n_outputs: usize,
     is_classification: bool,
 ) {
     let model = unsafe { &mut *model_ptr };
@@ -68,14 +126,10 @@ pub extern "C" fn mlp_predict(
     let pred = model.predict(inputs, is_classification);
     let out = unsafe { slice::from_raw_parts_mut(out_ptr, n_outputs) };
     for i in 0..n_outputs {
-        out[i] = pred[i]; // on recopie la prédiction dans le tampon Python
+        out[i] = pred[i];
     }
 }
 
-// ---------------------------------------------------------------------
-//  mlp_export_weights : recopie tous les poids a plat dans out_ptr.
-//  (Python les recupere puis les sauvegarde en JSON.)
-// ---------------------------------------------------------------------
 #[no_mangle]
 pub extern "C" fn mlp_export_weights(model_ptr: *mut MLP, out_ptr: *mut f64, len: usize) {
     let model = unsafe { &*model_ptr };
@@ -83,10 +137,6 @@ pub extern "C" fn mlp_export_weights(model_ptr: *mut MLP, out_ptr: *mut f64, len
     model.export_weights(out);
 }
 
-// ---------------------------------------------------------------------
-//  mlp_import_weights : recharge les poids a plat depuis in_ptr.
-//  (Python lit le JSON puis renvoie les poids ici.)
-// ---------------------------------------------------------------------
 #[no_mangle]
 pub extern "C" fn mlp_import_weights(model_ptr: *mut MLP, in_ptr: *const f64, len: usize) {
     let model = unsafe { &mut *model_ptr };
@@ -94,9 +144,6 @@ pub extern "C" fn mlp_import_weights(model_ptr: *mut MLP, in_ptr: *const f64, le
     model.import_weights(inp);
 }
 
-// ---------------------------------------------------------------------
-//  mlp_destroy : libere la memoire du reseau (appele depuis Python a la fin).
-// ---------------------------------------------------------------------
 #[no_mangle]
 pub extern "C" fn mlp_destroy(model_ptr: *mut MLP) {
     if !model_ptr.is_null() {
