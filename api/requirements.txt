@@ -1,0 +1,6 @@
+# Dependances de l'API VisionAI
+fastapi
+uvicorn
+python-multipart
+pillow
+numpy
