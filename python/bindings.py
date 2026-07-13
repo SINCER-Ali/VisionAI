@@ -4,8 +4,8 @@
 import ctypes
 import os
 import platform
-import json      # sauvegarde/chargement JSON (MLP)
-import array     # sauvegarde/chargement binaire (MLP)
+import json      # sauvegarde/chargement JSON
+import array     # sauvegarde/chargement binaire
 
 # --- Trouver et charger la bibliotheque partagee Rust (UNE seule fois) ---
 _dossier = os.path.dirname(__file__)
@@ -233,4 +233,124 @@ class MLP:
     def __del__(self):
         if getattr(self, "_ptr", None):
             lib.mlp_destroy(self._ptr)
+            self._ptr = None
+
+
+# RBF (Ali)
+lib.rbf_new.argtypes = [ctypes.c_size_t, ctypes.c_double]
+lib.rbf_new.restype = ctypes.c_void_p
+
+lib.rbf_train.argtypes = [
+    ctypes.c_void_p,
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.c_size_t,
+    ctypes.c_size_t,
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.c_size_t,
+    ctypes.c_size_t,
+]
+lib.rbf_train.restype = None
+
+lib.rbf_predict.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+lib.rbf_predict.restype = ctypes.c_double
+
+lib.rbf_predict_class.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+lib.rbf_predict_class.restype = ctypes.c_double
+
+lib.rbf_free.argtypes = [ctypes.c_void_p]
+lib.rbf_free.restype = None
+
+lib.rbf_gamma.argtypes = [ctypes.c_void_p]
+lib.rbf_gamma.restype = ctypes.c_double
+lib.rbf_nb_centres.argtypes = [ctypes.c_void_p]
+lib.rbf_nb_centres.restype = ctypes.c_size_t
+lib.rbf_taille_centre.argtypes = [ctypes.c_void_p]
+lib.rbf_taille_centre.restype = ctypes.c_size_t
+lib.rbf_export_centres.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+lib.rbf_export_centres.restype = None
+lib.rbf_export_poids.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+lib.rbf_export_poids.restype = None
+lib.rbf_charger.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_size_t, ctypes.c_size_t,
+                            ctypes.POINTER(ctypes.c_double), ctypes.c_size_t, ctypes.c_double]
+lib.rbf_charger.restype = ctypes.c_void_p
+
+
+def _c_doubles(lst):
+    return (ctypes.c_double * len(lst))(*lst)
+
+
+class RBFNetwork:
+    def __init__(self, k, gamma):
+        self._ptr = lib.rbf_new(k, gamma)
+
+    def train(self, data, targets, k, iterations=100):
+        n = len(data)
+        f = len(data[0])
+        plat = [float(v) for row in data for v in row]
+        lib.rbf_train(self._ptr, _c_doubles(plat), n, f,
+                      _c_doubles([float(t) for t in targets]), k, iterations)
+
+    def predict(self, x):
+        x = [float(v) for v in x]
+        return lib.rbf_predict(self._ptr, _c_doubles(x), len(x))
+
+    def predict_class(self, x):
+        x = [float(v) for v in x]
+        return lib.rbf_predict_class(self._ptr, _c_doubles(x), len(x))
+
+    def get_state(self):
+        # centres + poids + gamma depuis le rust
+        nb = lib.rbf_nb_centres(self._ptr)
+        taille = lib.rbf_taille_centre(self._ptr)
+        c = (ctypes.c_double * (nb * taille))()
+        lib.rbf_export_centres(self._ptr, c, nb * taille)
+        p = (ctypes.c_double * nb)()
+        lib.rbf_export_poids(self._ptr, p, nb)
+        centres = [list(c[i * taille:(i + 1) * taille]) for i in range(nb)]
+        return {"gamma": lib.rbf_gamma(self._ptr), "centres": centres, "poids": list(p)}
+
+    @staticmethod
+    def from_state(s):
+        nb = len(s["centres"])
+        taille = len(s["centres"][0]) if nb else 0
+        plat = [v for ligne in s["centres"] for v in ligne]
+        obj = RBFNetwork.__new__(RBFNetwork)
+        obj._ptr = lib.rbf_charger(_c_doubles(plat), nb, taille,
+                                   _c_doubles(s["poids"]), len(s["poids"]), s["gamma"])
+        return obj
+
+    def save_json(self, chemin):
+        with open(chemin, "w", encoding="utf-8") as f:
+            json.dump(self.get_state(), f)
+
+    @staticmethod
+    def load_json(chemin):
+        with open(chemin, "r", encoding="utf-8") as f:
+            return RBFNetwork.from_state(json.load(f))
+
+    def save_binary(self, chemin):
+        s = self.get_state()
+        nb = len(s["centres"])
+        taille = len(s["centres"][0]) if nb else 0
+        entete = array.array("i", [nb, taille])
+        vals = array.array("d", [s["gamma"]] + [v for ligne in s["centres"] for v in ligne] + list(s["poids"]))
+        with open(chemin, "wb") as f:
+            entete.tofile(f)
+            vals.tofile(f)
+
+    @staticmethod
+    def load_binary(chemin):
+        with open(chemin, "rb") as f:
+            entete = array.array("i"); entete.fromfile(f, 2)
+            nb, taille = entete[0], entete[1]
+            vals = array.array("d"); vals.fromfile(f, 1 + nb * taille + nb)
+        gamma = vals[0]
+        plat = list(vals[1:1 + nb * taille])
+        poids = list(vals[1 + nb * taille:])
+        centres = [plat[i * taille:(i + 1) * taille] for i in range(nb)]
+        return RBFNetwork.from_state({"gamma": gamma, "centres": centres, "poids": poids})
+
+    def __del__(self):
+        if getattr(self, "_ptr", None):
+            lib.rbf_free(self._ptr)
             self._ptr = None

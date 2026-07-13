@@ -150,3 +150,80 @@ pub extern "C" fn mlp_destroy(model_ptr: *mut MLP) {
         unsafe { drop(Box::from_raw(model_ptr)) };
     }
 }
+
+// RBF (Ali)
+mod rbf;
+use rbf::RBFNetwork;
+
+#[no_mangle]
+pub extern "C" fn rbf_new(k: usize, gamma: f64) -> *mut RBFNetwork {
+    Box::into_raw(Box::new(RBFNetwork::new(k, gamma)))
+}
+
+#[no_mangle]
+pub extern "C" fn rbf_train(
+    ptr: *mut RBFNetwork,
+    data: *const f64,
+    n_samples: usize,
+    n_features: usize,
+    targets: *const f64,
+    k: usize,
+    iterations: usize,
+) {
+    let rbf = unsafe { &mut *ptr };
+    let data_slice = unsafe { slice::from_raw_parts(data, n_samples * n_features) };
+    let data_vec: Vec<Vec<f64>> = data_slice.chunks(n_features).map(|c| c.to_vec()).collect();
+    let targets_slice = unsafe { slice::from_raw_parts(targets, n_samples) };
+    rbf.train(&data_vec, targets_slice, k, iterations);
+}
+
+#[no_mangle]
+pub extern "C" fn rbf_predict(ptr: *mut RBFNetwork, input: *const f64, n_features: usize) -> f64 {
+    let rbf = unsafe { &*ptr };
+    let x = unsafe { slice::from_raw_parts(input, n_features) };
+    rbf.predict(x)
+}
+
+#[no_mangle]
+pub extern "C" fn rbf_predict_class(ptr: *mut RBFNetwork, input: *const f64, n_features: usize) -> f64 {
+    let rbf = unsafe { &*ptr };
+    let x = unsafe { slice::from_raw_parts(input, n_features) };
+    rbf.predict_class(x)
+}
+
+#[no_mangle]
+pub extern "C" fn rbf_free(ptr: *mut RBFNetwork) {
+    unsafe { drop(Box::from_raw(ptr)); }
+}
+
+// sauvegarde : on sort les centres, les poids et gamma vers python
+#[no_mangle]
+pub extern "C" fn rbf_gamma(ptr: *mut RBFNetwork) -> f64 { unsafe { &*ptr }.gamma() }
+
+#[no_mangle]
+pub extern "C" fn rbf_nb_centres(ptr: *mut RBFNetwork) -> usize { unsafe { &*ptr }.nb_centres() }
+
+#[no_mangle]
+pub extern "C" fn rbf_taille_centre(ptr: *mut RBFNetwork) -> usize { unsafe { &*ptr }.taille_centre() }
+
+#[no_mangle]
+pub extern "C" fn rbf_export_centres(ptr: *mut RBFNetwork, out: *mut f64, n: usize) {
+    let plat = unsafe { &*ptr }.centres_plat();
+    let dst = unsafe { slice::from_raw_parts_mut(out, n) };
+    for i in 0..n.min(plat.len()) { dst[i] = plat[i]; }
+}
+
+#[no_mangle]
+pub extern "C" fn rbf_export_poids(ptr: *mut RBFNetwork, out: *mut f64, n: usize) {
+    let p = unsafe { &*ptr }.poids();
+    let dst = unsafe { slice::from_raw_parts_mut(out, n) };
+    for i in 0..n.min(p.len()) { dst[i] = p[i]; }
+}
+
+#[no_mangle]
+pub extern "C" fn rbf_charger(centres: *const f64, nb: usize, taille: usize,
+                              poids: *const f64, n_poids: usize, gamma: f64) -> *mut RBFNetwork {
+    let c = unsafe { slice::from_raw_parts(centres, nb * taille) };
+    let p = unsafe { slice::from_raw_parts(poids, n_poids) };
+    Box::into_raw(Box::new(RBFNetwork::depuis_params(c, nb, taille, p, gamma)))
+}
