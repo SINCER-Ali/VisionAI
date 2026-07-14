@@ -9,6 +9,7 @@
 import io
 import os
 import sys
+import json
 
 import numpy as np
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
@@ -16,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Rendre le dossier python/ importable (bindings.py + preprocessing.py)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
-from bindings import MLP
+from bindings import MLP, ModeleLineaire, SVM, UnContreTous, RBFNetwork  # noqa: F401
 from preprocessing import image_to_vector
 
 CLASSES = ["aucun", "humain", "animal"]  # aucun=0, humain=1, animal=2
@@ -69,25 +70,30 @@ def _charger_mlp():
 
 
 def _charger_modeles():
-    """(Re)charge tous les modeles disponibles dans le registre MODELES."""
+    """(Re)charge TOUS les modeles pre-entraines depuis le disque (models/).
+    Chaque entree : "nom" -> objet avec une methode .predict(vecteur).
+    Un modele dont le fichier manque est simplement ignore (pas de crash)."""
     MODELES.clear()
-    # Chaque entree : "nom" -> objet modele avec une methode .predict(vecteur).
-    MODELES["mlp"] = _charger_mlp()   # MLP (Nina) -> charge models/mlp_weights.json
 
-    # ================= INTEGRATION (au moment du merge des branches) =================
-    # Pour BRANCHER le modele d'un coequipier, 3 conditions puis 1 ligne ici :
-    #   1) son module Rust est compile dans lib_rust (mod lineaire/svm/rbf + FFI)
-    #   2) sa classe Python existe dans bindings.py (ModeleLineaire / SVM / RBF)
-    #      avec une methode de chargement depuis le disque (ex. load_json)
-    #   3) son modele PRE-ENTRAINE est sauvegarde dans models/
-    # Ensuite, decommenter (exemple) :
-    #   from bindings import ModeleLineaire, SVM        # (a ajouter en haut du fichier)
-    #   MODELES["lineaire"] = ModeleLineaire.load_json(_chemin_modele("lineaire_weights.json"))
-    #   MODELES["svm"]      = SVM.load_json(_chemin_modele("svm_weights.json"))
-    #   MODELES["rbf"]      = RBF.load_json(_chemin_modele("rbf_weights.json"))
-    # -> le menu du client (/models) affichera automatiquement les nouveaux modeles.
-    # =================================================================================
-    print(f"[startup] modeles charges : {list(MODELES.keys())}")
+    def essayer(nom, fabrique):
+        try:
+            MODELES[nom] = fabrique()
+            print(f"[startup] modele '{nom}' charge")
+        except Exception as e:
+            print(f"[startup] modele '{nom}' NON charge ({e}) -> lancez son train_*.py")
+
+    def _charger_rbf():
+        # RBF d'Ali : rbf_weights.json = {"classes":..., "modeles":[etats]} (un-contre-tous)
+        with open(_chemin_modele("rbf_weights.json"), encoding="utf-8") as f:
+            data = json.load(f)
+        modeles = [RBFNetwork.from_state(s) for s in data["modeles"]]
+        return UnContreTous(modeles, data["classes"])
+
+    essayer("mlp", _charger_mlp)   # MLP (Nina)
+    essayer("lineaire", lambda: UnContreTous.load_json(_chemin_modele("lineaire_weights.json")))  # Valentin (un-contre-tous)
+    essayer("svm", lambda: UnContreTous.load_json(_chemin_modele("svm_weights.json")))            # Valentin (un-contre-tous)
+    essayer("rbf", _charger_rbf)                                                                    # Ali (un-contre-tous)
+    print(f"[startup] modeles disponibles : {list(MODELES.keys())}")
 
 
 @app.on_event("startup")
@@ -124,11 +130,14 @@ async def predict(file: UploadFile = File(...), model: str = Form("mlp")):
         vec = image_to_vector(io.BytesIO(data)).tolist()   # image -> vecteur 12288
     except Exception as e:
         raise HTTPException(400, f"Image illisible : {e}")
+    import math
     sorties = MODELES[model].predict(vec)
     # Robuste aux 2 familles de modeles :
     #  - MLP / RBF  -> renvoient une LISTE de scores (un par classe) -> argmax
     #  - lineaire / SVM (binaires) -> renvoient UN seul score -> signe
     sorties = list(sorties) if isinstance(sorties, (list, tuple)) else [float(sorties)]
+    # securite : on remplace inf/nan (modele divergent) par 0 -> pas de crash JSON
+    sorties = [v if math.isfinite(v) else 0.0 for v in sorties]
     if len(sorties) >= len(CLASSES):                       # modele multi-classe
         idx = int(np.argmax(sorties[:len(CLASSES)]))
         scores = {CLASSES[i]: round(float(sorties[i]), 3) for i in range(len(CLASSES))}

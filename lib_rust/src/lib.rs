@@ -227,3 +227,77 @@ pub extern "C" fn rbf_charger(centres: *const f64, nb: usize, taille: usize,
     let p = unsafe { slice::from_raw_parts(poids, n_poids) };
     Box::into_raw(Box::new(RBFNetwork::depuis_params(c, nb, taille, p, gamma)))
 }
+
+// ===================== Ajout (Nina) : save/load LINEAIRE (Valentin) =====================
+#[no_mangle]
+pub extern "C" fn linear_export_weights(ptr: *mut LinearModel, out: *mut f64, len: usize) {
+    let w = unsafe { &*ptr }.get_weights();
+    let dst = unsafe { slice::from_raw_parts_mut(out, len) };
+    for i in 0..len.min(w.len()) { dst[i] = w[i]; }
+}
+
+#[no_mangle]
+pub extern "C" fn linear_import_weights(ptr: *mut LinearModel, inp: *const f64, len: usize) {
+    let w = unsafe { slice::from_raw_parts(inp, len) };
+    unsafe { &mut *ptr }.set_weights(w);
+}
+
+// valeur brute (avant signe) -> utile pour le un-contre-tous (argmax)
+#[no_mangle]
+pub extern "C" fn linear_predict_value(ptr: *mut LinearModel, x_ptr: *const f64, input_dim: usize) -> f64 {
+    let model = unsafe { &*ptr };
+    let x = unsafe { slice::from_raw_parts(x_ptr, input_dim) };
+    model.predict_value(x)
+}
+
+// ===================== Ajout (Nina) : save/load SVM (Valentin) =====================
+#[no_mangle]
+pub extern "C" fn svm_nb_samples(ptr: *mut SVMModel) -> usize { unsafe { &*ptr }.nb_samples() }
+#[no_mangle]
+pub extern "C" fn svm_input_dim(ptr: *mut SVMModel) -> usize { unsafe { &*ptr }.input_dim() }
+#[no_mangle]
+pub extern "C" fn svm_get_bias(ptr: *mut SVMModel) -> f64 { unsafe { &*ptr }.get_bias() }
+#[no_mangle]
+pub extern "C" fn svm_get_gamma(ptr: *mut SVMModel) -> f64 { unsafe { &*ptr }.get_gamma() }
+
+#[no_mangle]
+pub extern "C" fn svm_export_alphas(ptr: *mut SVMModel, out: *mut f64, len: usize) {
+    let a = unsafe { &*ptr }.get_alphas();
+    let dst = unsafe { slice::from_raw_parts_mut(out, len) };
+    for i in 0..len.min(a.len()) { dst[i] = a[i]; }
+}
+
+#[no_mangle]
+pub extern "C" fn svm_export_y_train(ptr: *mut SVMModel, out: *mut f64, len: usize) {
+    let y = unsafe { &*ptr }.get_y_train();
+    let dst = unsafe { slice::from_raw_parts_mut(out, len) };
+    for i in 0..len.min(y.len()) { dst[i] = y[i]; }
+}
+
+#[no_mangle]
+pub extern "C" fn svm_export_x_train(ptr: *mut SVMModel, out: *mut f64, len: usize) {
+    let dst = unsafe { slice::from_raw_parts_mut(out, len) };
+    unsafe { &*ptr }.export_x_train(dst);
+}
+
+// valeur de decision continue -> pour le un-contre-tous (argmax)
+#[no_mangle]
+pub extern "C" fn svm_decision_value(ptr: *mut SVMModel, x_ptr: *const f64, input_dim: usize) -> f64 {
+    let model = unsafe { &*ptr };
+    let x = unsafe { slice::from_raw_parts(x_ptr, input_dim) };
+    model.valeur_decision(x)
+}
+
+#[no_mangle]
+pub extern "C" fn svm_charger(
+    alphas: *const f64, n_alphas: usize,
+    bias: f64,
+    x_flat: *const f64, x_len: usize,
+    y: *const f64,
+    n: usize, gamma: f64, dim: usize,
+) -> *mut SVMModel {
+    let a = unsafe { slice::from_raw_parts(alphas, n_alphas) };
+    let xf = unsafe { slice::from_raw_parts(x_flat, x_len) };
+    let yy = unsafe { slice::from_raw_parts(y, n) };
+    Box::into_raw(Box::new(SVMModel::depuis_params(a, bias, xf, yy, gamma, n, dim)))
+}

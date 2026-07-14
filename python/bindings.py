@@ -44,6 +44,14 @@ lib.linear_predict.restype = ctypes.c_double
 lib.linear_destroy.argtypes = [ctypes.c_void_p]
 lib.linear_destroy.restype = None
 
+# --- ajout (save/load lineaire) ---
+lib.linear_export_weights.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+lib.linear_export_weights.restype = None
+lib.linear_import_weights.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+lib.linear_import_weights.restype = None
+lib.linear_predict_value.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
+lib.linear_predict_value.restype = ctypes.c_double
+
 
 class ModeleLineaire:
     def __init__(self, input_dim):
@@ -61,8 +69,60 @@ class ModeleLineaire:
         x_c = (ctypes.c_double * len(x))(*x)
         return lib.linear_predict(self._ptr, x_c, self.input_dim)
 
+    def predict_value(self, x):
+        # valeur brute (avant le signe) -> utile pour le un-contre-tous
+        x_c = (ctypes.c_double * len(x))(*x)
+        return lib.linear_predict_value(self._ptr, x_c, self.input_dim)
+
+    def get_weights(self):
+        n = self.input_dim + 1
+        buf = (ctypes.c_double * n)()
+        lib.linear_export_weights(self._ptr, buf, n)
+        return list(buf)
+
+    def set_weights(self, w):
+        buf = (ctypes.c_double * len(w))(*w)
+        lib.linear_import_weights(self._ptr, buf, len(w))
+
+    # etat serialisable (pour le un-contre-tous)
+    def _etat(self):
+        return {"type": "lineaire", "input_dim": self.input_dim, "poids": self.get_weights()}
+
+    @staticmethod
+    def _depuis_etat(e):
+        m = ModeleLineaire(e["input_dim"])
+        m.set_weights(e["poids"])
+        return m
+
+    def save_json(self, chemin):
+        with open(chemin, "w", encoding="utf-8") as f:
+            json.dump(self._etat(), f)
+
+    @staticmethod
+    def load_json(chemin):
+        with open(chemin, "r", encoding="utf-8") as f:
+            return ModeleLineaire._depuis_etat(json.load(f))
+
+    def save_binary(self, chemin):
+        entete = array.array("i", [self.input_dim])
+        poids = array.array("d", self.get_weights())
+        with open(chemin, "wb") as f:
+            entete.tofile(f); poids.tofile(f)
+
+    @staticmethod
+    def load_binary(chemin):
+        with open(chemin, "rb") as f:
+            dim = array.array("i"); dim.fromfile(f, 1)
+            poids = array.array("d"); poids.fromfile(f, dim[0] + 1)
+        m = ModeleLineaire(dim[0])
+        m.set_weights(list(poids))
+        return m
+
+    save = save_json
+    load = load_json
+
     def __del__(self):
-        if self._ptr:
+        if getattr(self, "_ptr", None):
             lib.linear_destroy(self._ptr)
             self._ptr = None
 
@@ -89,6 +149,20 @@ lib.svm_predict.restype = ctypes.c_double
 lib.svm_destroy.argtypes = [ctypes.c_void_p]
 lib.svm_destroy.restype = None
 
+# --- ajout (save/load SVM) ---
+lib.svm_nb_samples.argtypes = [ctypes.c_void_p]; lib.svm_nb_samples.restype = ctypes.c_size_t
+lib.svm_input_dim.argtypes = [ctypes.c_void_p]; lib.svm_input_dim.restype = ctypes.c_size_t
+lib.svm_get_bias.argtypes = [ctypes.c_void_p]; lib.svm_get_bias.restype = ctypes.c_double
+lib.svm_get_gamma.argtypes = [ctypes.c_void_p]; lib.svm_get_gamma.restype = ctypes.c_double
+lib.svm_export_alphas.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]; lib.svm_export_alphas.restype = None
+lib.svm_export_y_train.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]; lib.svm_export_y_train.restype = None
+lib.svm_export_x_train.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]; lib.svm_export_x_train.restype = None
+lib.svm_decision_value.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]; lib.svm_decision_value.restype = ctypes.c_double
+lib.svm_charger.argtypes = [ctypes.POINTER(ctypes.c_double), ctypes.c_size_t, ctypes.c_double,
+                            ctypes.POINTER(ctypes.c_double), ctypes.c_size_t,
+                            ctypes.POINTER(ctypes.c_double), ctypes.c_size_t, ctypes.c_double, ctypes.c_size_t]
+lib.svm_charger.restype = ctypes.c_void_p
+
 
 class SVM:
     def __init__(self):
@@ -107,10 +181,118 @@ class SVM:
         x_c = (ctypes.c_double * len(x))(*x)
         return lib.svm_predict(self._ptr, x_c, self.input_dim)
 
+    def decision_value(self, x):
+        # valeur continue (avant le signe) -> pour le un-contre-tous
+        x_c = (ctypes.c_double * len(x))(*x)
+        return lib.svm_decision_value(self._ptr, x_c, self.input_dim)
+
+    # etat serialisable complet (alphas + bias + gamma + exemples)
+    def _etat(self):
+        n = lib.svm_nb_samples(self._ptr)
+        dim = lib.svm_input_dim(self._ptr)
+        alphas = (ctypes.c_double * n)(); lib.svm_export_alphas(self._ptr, alphas, n)
+        ytr = (ctypes.c_double * n)(); lib.svm_export_y_train(self._ptr, ytr, n)
+        xtr = (ctypes.c_double * (n * dim))(); lib.svm_export_x_train(self._ptr, xtr, n * dim)
+        return {"type": "svm", "n": n, "dim": dim,
+                "bias": lib.svm_get_bias(self._ptr), "gamma": lib.svm_get_gamma(self._ptr),
+                "alphas": list(alphas), "y_train": list(ytr), "x_train": list(xtr)}
+
+    @staticmethod
+    def _depuis_etat(e):
+        obj = SVM.__new__(SVM)                 # on ne rappelle pas svm_create (on charge directement)
+        obj.input_dim = e["dim"]
+        a = (ctypes.c_double * len(e["alphas"]))(*e["alphas"])
+        xf = (ctypes.c_double * len(e["x_train"]))(*e["x_train"])
+        y = (ctypes.c_double * len(e["y_train"]))(*e["y_train"])
+        obj._ptr = lib.svm_charger(a, len(e["alphas"]), e["bias"], xf, len(e["x_train"]),
+                                   y, e["n"], e["gamma"], e["dim"])
+        return obj
+
+    def save_json(self, chemin):
+        with open(chemin, "w", encoding="utf-8") as f:
+            json.dump(self._etat(), f)
+
+    @staticmethod
+    def load_json(chemin):
+        with open(chemin, "r", encoding="utf-8") as f:
+            return SVM._depuis_etat(json.load(f))
+
+    def save_binary(self, chemin):
+        e = self._etat()
+        entete = array.array("i", [e["n"], e["dim"]])
+        scal = array.array("d", [e["bias"], e["gamma"]])
+        corps = array.array("d", e["alphas"] + e["y_train"] + e["x_train"])
+        with open(chemin, "wb") as f:
+            entete.tofile(f); scal.tofile(f); corps.tofile(f)
+
+    @staticmethod
+    def load_binary(chemin):
+        with open(chemin, "rb") as f:
+            hdr = array.array("i"); hdr.fromfile(f, 2); n, dim = hdr[0], hdr[1]
+            scal = array.array("d"); scal.fromfile(f, 2)
+            corps = array.array("d"); corps.fromfile(f, n + n + n * dim)
+        return SVM._depuis_etat({"n": n, "dim": dim, "bias": scal[0], "gamma": scal[1],
+                                 "alphas": list(corps[:n]), "y_train": list(corps[n:2 * n]),
+                                 "x_train": list(corps[2 * n:])})
+
+    save = save_json
+    load = load_json
+
     def __del__(self):
-        if self._ptr:
+        if getattr(self, "_ptr", None):
             lib.svm_destroy(self._ptr)
             self._ptr = None
+
+
+# =================== Un-contre-tous : rend un modele BINAIRE (lineaire/SVM) multi-classe ===================
+class UnContreTous:
+    """Enveloppe N modeles binaires (un par classe). C'est le "Linear Model x3" du cours.
+    predict(x) renvoie la LISTE des scores continus (un par classe) -> l'API fait argmax."""
+
+    def __init__(self, sous_modeles, classes):
+        self.sous_modeles = sous_modeles   # liste de modeles binaires (ModeleLineaire ou SVM)
+        self.classes = classes             # noms des classes (ex. ["aucun","humain","animal"])
+
+    def predict(self, x, is_classification=True):
+        # renvoie la valeur CONTINUE de chaque sous-modele (un par classe) -> argmax cote API
+        scores = []
+        for m in self.sous_modeles:
+            if hasattr(m, "decision_value"):     # SVM
+                scores.append(m.decision_value(x))
+            elif hasattr(m, "predict_value"):    # lineaire
+                scores.append(m.predict_value(x))
+            else:                                # RBF (predict renvoie deja une valeur continue)
+                scores.append(m.predict(x))
+        return scores
+
+    @staticmethod
+    def entrainer(fabrique, X, y, n_classes, **params):
+        """fabrique(input_dim) -> un modele binaire ; entraine 1 modele par classe."""
+        X = [list(map(float, r)) for r in X]
+        modeles = []
+        for c in range(n_classes):
+            yb = [1.0 if int(yi) == c else -1.0 for yi in y]   # classe c = +1, le reste = -1
+            try:
+                m = fabrique(len(X[0]))     # ModeleLineaire(input_dim)
+            except TypeError:
+                m = fabrique()              # SVM() (ne prend pas d'argument)
+            m.fit(X, yb, **params)
+            modeles.append(m)
+        return UnContreTous(modeles, list(range(n_classes)))
+
+    def save_json(self, chemin):
+        data = {"classes": self.classes, "sous_modeles": [m._etat() for m in self.sous_modeles]}
+        with open(chemin, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+    @staticmethod
+    def load_json(chemin):
+        with open(chemin, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        modeles = []
+        for e in data["sous_modeles"]:
+            modeles.append(SVM._depuis_etat(e) if e["type"] == "svm" else ModeleLineaire._depuis_etat(e))
+        return UnContreTous(modeles, data["classes"])
 
 
 ### =================== Modele MLP / PMC (Nina) =================== ###
