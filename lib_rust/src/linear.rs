@@ -70,3 +70,10 @@ impl LinearModel {
     } // Fin de la méthode train
 } // Fin de l'implémentation du modèle linéaire
 
+// ===================== Ajout (Nina) : sauvegarde / chargement =====================
+// Bloc SÉPARÉ (on ne touche pas au code au-dessus).
+impl LinearModel {
+    pub fn get_weights(&self) -> &[f64] { &self.weights }           // récupère les poids
+    pub fn set_weights(&mut self, w: &[f64]) { self.weights = w.to_vec(); } // remet des poids
+}
+

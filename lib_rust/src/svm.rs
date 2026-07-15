@@ -134,3 +134,39 @@ impl SVMModel {
         } // fin du if
     } // fin de la méthode train
 } // fin du bloc implémenté
+
+// ===================== Ajout (Nina) : sauvegarde / chargement =====================
+// Bloc SÉPARÉ (on ne touche pas au code au-dessus). Expose l'état du modèle
+// pour pouvoir le sauvegarder sur disque et le recharger.
+impl SVMModel {
+    pub fn nb_samples(&self) -> usize { self.x_train.len() }
+    pub fn input_dim(&self) -> usize {
+        if self.x_train.is_empty() { 0 } else { self.x_train[0].len() }
+    }
+    pub fn get_bias(&self) -> f64 { self.bias }
+    pub fn get_gamma(&self) -> f64 { self.gamma }
+    pub fn get_alphas(&self) -> &[f64] { &self.alphas }
+    pub fn get_y_train(&self) -> &[f64] { &self.y_train }
+
+    // recopie x_train (les exemples) à plat dans `out`
+    pub fn export_x_train(&self, out: &mut [f64]) {
+        let mut k = 0;
+        for ligne in &self.x_train {
+            for &v in ligne {
+                if k < out.len() { out[k] = v; k += 1; }
+            }
+        }
+    }
+
+    // valeur de décision continue (pour le un-contre-tous / argmax)
+    pub fn valeur_decision(&self, x: &[f64]) -> f64 { self.decision_value(x) }
+
+    // reconstruit un SVM à partir de son état sauvegardé
+    pub fn depuis_params(alphas: &[f64], bias: f64, x_flat: &[f64], y: &[f64], gamma: f64, n: usize, dim: usize) -> SVMModel {
+        let mut x_train = Vec::with_capacity(n);
+        for k in 0..n {
+            x_train.push(x_flat[k * dim..(k + 1) * dim].to_vec());
+        }
+        SVMModel { alphas: alphas.to_vec(), bias, x_train, y_train: y.to_vec(), gamma }
+    }
+}

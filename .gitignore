@@ -30,5 +30,14 @@ Thumbs.db
 # ---------------------- Claude Code (config locale perso) ----------------------
 .claude/settings.local.json
 
-# ---------------------- Donnees (images + .npy) ----------------------
-# datasets/
+# ---------------------- Modeles entraines (lourds) ----------------------
+# Regeneres par les scripts python/train_*.py -> on ne les versionne pas.
+models/*.json
+models/*.bin
+models/*.model
+
+# ---------------------- Donnees : images brutes (lourdes, sur Drive) ----------------------
+datasets/train/
+# (les .npy restent versionnes : ils sont produits par preprocessing.py et
+#  utilises par les scripts train_*.py ; decommente si trop lourd)
+# datasets/*.npy
