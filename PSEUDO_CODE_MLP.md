@@ -1,4 +1,4 @@
-# Pseudo-code du MLP / PMC (Perceptron Multi-Couches) — Auteur : Nina
+# Pseudo-code du MLP / PMC (Perceptron Multi-Couches) — Auteur : Thinina
 
 > Support de maîtrise. Chaque partie du pseudo-code correspond **ligne pour ligne**
 > à `lib_rust/src/mlp.rs`. But : pouvoir réciter et modifier le MLP devant le jury.

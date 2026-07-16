@@ -1,4 +1,4 @@
-// Auteurs : Valentin BROUC (lineaire, SVM) & Nina (MLP)
+// Auteurs : Valentin BROUC (lineaire, SVM) & Thinina (MLP)
 // Facade "C" : expose les modeles pour les utiliser depuis Python (ctypes).
 
 use std::slice;
@@ -82,7 +82,7 @@ pub extern "C" fn svm_destroy(model_ptr: *mut SVMModel) {
     }
 }
 
-// ===================== MODELE MLP / PMC (Nina) =====================
+// ===================== MODELE MLP / PMC (Thinina) =====================
 mod mlp;
 use mlp::MLP;
 
@@ -228,7 +228,7 @@ pub extern "C" fn rbf_charger(centres: *const f64, nb: usize, taille: usize,
     Box::into_raw(Box::new(RBFNetwork::depuis_params(c, nb, taille, p, gamma)))
 }
 
-// ===================== Ajout (Nina) : save/load LINEAIRE (Valentin) =====================
+// ===================== Ajout (Thinina) : save/load LINEAIRE (Valentin) =====================
 #[no_mangle]
 pub extern "C" fn linear_export_weights(ptr: *mut LinearModel, out: *mut f64, len: usize) {
     let w = unsafe { &*ptr }.get_weights();
@@ -250,7 +250,24 @@ pub extern "C" fn linear_predict_value(ptr: *mut LinearModel, x_ptr: *const f64,
     model.predict_value(x)
 }
 
-// ===================== Ajout (Nina) : save/load SVM (Valentin) =====================
+// entrainement en REGRESSION (Widrow-Hoff) -> cas de regression du prof
+#[no_mangle]
+pub extern "C" fn linear_train_regression(
+    model_ptr: *mut LinearModel,
+    x_ptr: *const f64,
+    y_ptr: *const f64,
+    n_samples: usize,
+    input_dim: usize,
+    lr: f64,
+    epochs: usize,
+) {
+    let model = unsafe { &mut *model_ptr };
+    let all_x = unsafe { slice::from_raw_parts(x_ptr, n_samples * input_dim) };
+    let all_y = unsafe { slice::from_raw_parts(y_ptr, n_samples) };
+    model.train_regression(all_x, all_y, n_samples, input_dim, lr, epochs);
+}
+
+// ===================== Ajout (Thinina) : save/load SVM (Valentin) =====================
 #[no_mangle]
 pub extern "C" fn svm_nb_samples(ptr: *mut SVMModel) -> usize { unsafe { &*ptr }.nb_samples() }
 #[no_mangle]

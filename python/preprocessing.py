@@ -13,13 +13,16 @@ A relancer a chaque fois que tu ajoutes des photos.
 import os
 import numpy as np
 from PIL import Image
+from pillow_heif import register_heif_opener
+
+register_heif_opener()   # active la lecture des .heic (format natif des iPhone)
 
 # --- Reglages ---
 DOSSIER = os.path.join(os.path.dirname(__file__), "..", "datasets", "train")
 CLASSES = ["aucun", "humain", "animal"]   # l'indice = l'etiquette : aucun=0, humain=1, animal=2
 TAILLE = 64                               # images redimensionnees en TAILLE x TAILLE
 PART_TEST = 0.2                           # 20% des images pour le test
-EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp")
+EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".heic")
 np.random.seed(42)                        # decoupage reproductible
 
 

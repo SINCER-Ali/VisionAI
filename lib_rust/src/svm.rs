@@ -135,7 +135,7 @@ impl SVMModel {
     } // fin de la méthode train
 } // fin du bloc implémenté
 
-// ===================== Ajout (Nina) : sauvegarde / chargement =====================
+// ===================== Ajout (Thinina) : sauvegarde / chargement =====================
 // Bloc SÉPARÉ (on ne touche pas au code au-dessus). Expose l'état du modèle
 // pour pouvoir le sauvegarder sur disque et le recharger.
 impl SVMModel {

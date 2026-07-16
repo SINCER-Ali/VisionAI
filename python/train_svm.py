@@ -14,6 +14,7 @@ Lancer : ../.venv/Scripts/python.exe train_svm.py
 """
 
 import os
+import time
 import numpy as np
 from bindings import SVM, UnContreTous
 
@@ -28,25 +29,53 @@ def charger(nom):
     return np.load(os.path.join(os.path.dirname(__file__), "..", "datasets", nom))
 
 
+def precision(uct, X, y):
+    """% de bonnes classifications : la classe = le sous-modele au plus grand score."""
+    bons = sum(int(np.argmax(uct.predict(x)) == int(vrai))
+               for x, vrai in zip(X.tolist(), y))
+    return 100.0 * bons / len(X)
+
+
 if __name__ == "__main__":
     X, y = charger("X_train.npy"), charger("y_train.npy")
     Xte, yte = charger("X_test.npy"), charger("y_test.npy")
+    n_dispo = len(X)
 
-    # sous-echantillonnage (le SVM garde tous les exemples)
+    # sous-echantillonnage (le SVM garde tous les exemples -> cout en O(n^2))
     if len(X) > MAX_EXEMPLES:
         idx = np.random.RandomState(0).permutation(len(X))[:MAX_EXEMPLES]
         X, y = X[idx], y[idx]
-    print(f"Entrainement SVM (un-contre-tous) sur {len(X)} images "
-          f"({X.shape[1]} entrees, noyau {'RBF' if GAMMA > 0 else 'lineaire'})...")
 
+    print(f"Train : {len(X)} images (sous-echantillonnees sur {n_dispo}) | "
+          f"Test : {len(Xte)} images | {X.shape[1]} entrees")
+    print(f"Modele SVM : un-contre-tous ({len(CLASSES)} modeles binaires), "
+          f"noyau {'RBF' if GAMMA > 0 else 'lineaire'}"
+          f"  (lr={LR}, epochs={EPOCHS}, gamma={GAMMA})\n")
+
+    print("Entrainement en cours...")
+    t0 = time.perf_counter()
     uct = UnContreTous.entrainer(SVM, X.tolist(), y.tolist(), len(CLASSES),
                                  lr=LR, epochs=EPOCHS, gamma=GAMMA)
+    print(f"Duree entrainement : {time.perf_counter() - t0:.1f} s")
 
     dossier = os.path.join(os.path.dirname(__file__), "..", "models")
     uct.save_json(os.path.join(dossier, "svm_weights.json"))
     print("Modele sauvegarde dans models/svm_weights.json")
 
-    bons = sum(int(np.argmax(uct.predict(x)) == int(yv)) for x, yv in zip(Xte.tolist(), yte))
-    print(f"Precision test : {100 * bons / len(Xte):.1f}%")
+    print(f"\nPrecision entrainement : {precision(uct, X, y):.1f}%")
+    print(f"Precision test         : {precision(uct, Xte, yte):.1f}%")
+
+    # Precision par classe (pour voir si le modele s'effondre sur une seule classe)
+    print("\nDetail par classe (sur le test) :")
+    for etiquette, classe in enumerate(CLASSES):
+        idx = np.where(yte == etiquette)[0]
+        if len(idx) == 0:
+            print(f"  {classe:8s} : aucune image de test"); continue
+        print(f"  {classe:8s} : {precision(uct, Xte[idx], yte[idx]):5.1f}%  ({len(idx)} images)")
+
+    # Score d'un modele qui repond toujours la classe la plus frequente (baseline a battre)
     vals, cnt = np.unique(yte, return_counts=True)
-    print(f"Baseline (classe majoritaire) : {100 * cnt.max() / len(yte):.1f}%")
+    etat = "equilibre" if cnt.max() == cnt.min() else "desequilibre"
+    print(f"\nBaseline (repond toujours la classe la plus frequente) : "
+          f"{100 * cnt.max() / len(yte):.1f}%"
+          f"  [test {etat} : {'/'.join(str(c) for c in cnt)}]")

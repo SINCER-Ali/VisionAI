@@ -276,7 +276,7 @@
                 <div class="icon">+</div>
                 <p>Glissez une image ici ou cliquez pour en choisir une</p>
             </div>
-            <input type="file" id="file-input" accept="image/*" />
+            <input type="file" id="file-input" accept="image/*,.heic,.HEIC" />
             <div id="preview-container">
                 <img id="preview-img" alt="Apercu" />
                 <div class="filename" id="filename"></div>
@@ -345,21 +345,28 @@
         });
 
         function handleFile(file) {
-            if (!file.type.startsWith('image/')) {
+            // Chrome ne reconnait pas le .heic : file.type est vide -> on teste aussi l'extension
+            var estHeic = /\.heic$/i.test(file.name);
+            if (!file.type.startsWith('image/') && !estHeic) {
                 showError('Veuillez selectionner une image.');
                 return;
             }
 
             currentFile = file;
+            filenameEl.textContent = file.name;
+            previewContainer.style.display = 'block';
+            btnPredict.disabled = false;
+            hideError();
+            resultContainer.style.display = 'none';
+
+            if (estHeic) {
+                // le navigateur ne sait pas AFFICHER un .heic (l'API, elle, sait le lire)
+                previewImg.style.display = 'none';
+                return;
+            }
+            previewImg.style.display = '';
             var reader = new FileReader();
-            reader.onload = function(e) {
-                previewImg.src = e.target.result;
-                filenameEl.textContent = file.name;
-                previewContainer.style.display = 'block';
-                btnPredict.disabled = false;
-                hideError();
-                resultContainer.style.display = 'none';
-            };
+            reader.onload = function(e) { previewImg.src = e.target.result; };
             reader.readAsDataURL(file);
         }
 

@@ -1,4 +1,4 @@
-// Auteur : Nina
+// Auteur : Thinina
 // =====================================================================
 //  MLP / PMC (Perceptron Multi-Couches) -- implementation FROM SCRATCH
 //  Portage fidele du "NaiveMLP" du cours (slides "Modele Lineaire et PMC").

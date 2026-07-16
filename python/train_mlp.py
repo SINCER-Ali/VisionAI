@@ -7,6 +7,7 @@ Lancer :  ../.venv/Scripts/python.exe train_mlp.py
 """
 
 import os
+import time
 import numpy as np
 from bindings import MLP
 
@@ -47,13 +48,16 @@ if __name__ == "__main__":
 
     print(f"Train : {len(X_train)} images | Test : {len(X_test)} images | {n_entrees} entrees")
     arch = [n_entrees, CACHEE, n_classes]
-    print(f"Architecture MLP : {arch}  (steps={STEPS}, lr={LR})\n")
+    print(f"Modele MLP : architecture {arch}  (steps={STEPS}, lr={LR})\n")
 
     Y_train = one_hot_pm1(y_train, n_classes)
 
     model = MLP(arch)
     print("Entrainement en cours...")
+    t0 = time.perf_counter()
     model.fit(X_train, Y_train, steps=STEPS, lr=LR, is_classification=True)
+    duree = time.perf_counter() - t0
+    print(f"Duree entrainement : {duree:.1f} s")
 
     # Sauvegarde du modele entraine (2 formats) -> l'API le chargera sans re-entrainer.
     dossier = os.path.join(os.path.dirname(__file__), "..", "models")
@@ -75,6 +79,9 @@ if __name__ == "__main__":
         acc = precision(model, X_test[idx], y_test[idx])
         print(f"  {classe:8s} : {acc:5.1f}%  ({len(idx)} images)")
 
-    # Rappel : le taux de la classe majoritaire (baseline a battre)
-    vals, counts = np.unique(y_test, return_counts=True)
-    print(f"\nBaseline (toujours predire la classe majoritaire) : {100*counts.max()/len(y_test):.1f}%")
+    # Score d'un modele qui repond toujours la classe la plus frequente (baseline a battre)
+    vals, cnt = np.unique(y_test, return_counts=True)
+    etat = "equilibre" if cnt.max() == cnt.min() else "desequilibre"
+    print(f"\nBaseline (repond toujours la classe la plus frequente) : "
+          f"{100 * cnt.max() / len(y_test):.1f}%"
+          f"  [test {etat} : {'/'.join(str(c) for c in cnt)}]")

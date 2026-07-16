@@ -1,4 +1,4 @@
-# Auteurs : Valentin BROUC (lineaire, SVM) & Nina (MLP)
+# Auteurs : Valentin BROUC (lineaire, SVM) & Thinina (MLP)
 # bindings.py : pont entre Python et Rust (via ctypes)
 
 import ctypes
@@ -51,6 +51,16 @@ lib.linear_import_weights.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_d
 lib.linear_import_weights.restype = None
 lib.linear_predict_value.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_double), ctypes.c_size_t]
 lib.linear_predict_value.restype = ctypes.c_double
+lib.linear_train_regression.argtypes = [
+    ctypes.c_void_p,
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.POINTER(ctypes.c_double),
+    ctypes.c_size_t,
+    ctypes.c_size_t,
+    ctypes.c_double,
+    ctypes.c_size_t,
+]
+lib.linear_train_regression.restype = None
 
 
 class ModeleLineaire:
@@ -69,8 +79,17 @@ class ModeleLineaire:
         x_c = (ctypes.c_double * len(x))(*x)
         return lib.linear_predict(self._ptr, x_c, self.input_dim)
 
+    def fit_regression(self, X, Y, lr=0.01, epochs=1000):
+        """Entraine en REGRESSION (valeur continue), pas en classification.
+        Y contient des reels quelconques (2, 3, 2.5...), pas des +1/-1."""
+        n = len(X)
+        plat = [float(v) for exemple in X for v in exemple]
+        X_c = (ctypes.c_double * len(plat))(*plat)
+        Y_c = (ctypes.c_double * n)(*[float(v) for v in Y])
+        lib.linear_train_regression(self._ptr, X_c, Y_c, n, self.input_dim, lr, epochs)
+
     def predict_value(self, x):
-        # valeur brute (avant le signe) -> utile pour le un-contre-tous
+        # valeur brute (avant le signe) -> utile pour le un-contre-tous ET la regression
         x_c = (ctypes.c_double * len(x))(*x)
         return lib.linear_predict_value(self._ptr, x_c, self.input_dim)
 
@@ -295,7 +314,7 @@ class UnContreTous:
         return UnContreTous(modeles, data["classes"])
 
 
-### =================== Modele MLP / PMC (Nina) =================== ###
+### =================== Modele MLP / PMC (Thinina) =================== ###
 lib.mlp_create.argtypes = [ctypes.POINTER(ctypes.c_size_t), ctypes.c_size_t, ctypes.c_size_t]
 lib.mlp_create.restype = ctypes.c_void_p
 

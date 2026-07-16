@@ -70,10 +70,40 @@ impl LinearModel {
     } // Fin de la méthode train
 } // Fin de l'implémentation du modèle linéaire
 
-// ===================== Ajout (Nina) : sauvegarde / chargement =====================
+// ===================== Ajout (Thinina) : sauvegarde / chargement =====================
 // Bloc SÉPARÉ (on ne touche pas au code au-dessus).
 impl LinearModel {
     pub fn get_weights(&self) -> &[f64] { &self.weights }           // récupère les poids
     pub fn set_weights(&mut self, w: &[f64]) { self.weights = w.to_vec(); } // remet des poids
+}
+
+// ===================== Ajout (Thinina) : REGRESSION (règle de Widrow-Hoff) =====================
+// Le `train` ci-dessus est le PERCEPTRON : il apprend à sortir +1 / -1 -> CLASSIFICATION.
+// Les cas de REGRESSION du prof (Linear Simple 2D/3D, Linear Tricky 3D...) demandent
+// d'apprendre une VALEUR CONTINUE. Une seule ligne change : on remplace le SIGNE
+// (predict_class) par la sortie brute (predict_value) dans le calcul de l'erreur.
+// Tout le reste (descente de gradient sur les poids) est identique au perceptron.
+impl LinearModel {
+    pub fn train_regression(
+        &mut self,
+        all_x: &[f64],    // toutes les entrées, aplaties
+        all_y: &[f64],    // les valeurs attendues (réels quelconques, pas +/-1)
+        n_samples: usize, // nombre d'exemples
+        input_dim: usize, // taille d'un exemple
+        lr: f64,          // taux d'apprentissage
+        epochs: usize,    // nombre de passages sur les données
+    ) {
+        for _ in 0..epochs {
+            for k in 0..n_samples {
+                let x = &all_x[k * input_dim..(k + 1) * input_dim]; // l'exemple k
+                let y_pred = self.predict_value(x);   // <-- VALEUR CONTINUE (et non le signe)
+                let error = all_y[k] - y_pred;        // erreur reelle (peut valoir 0.3, -1.7...)
+                self.weights[0] += lr * error;        // maj du biais
+                for i in 0..input_dim {
+                    self.weights[i + 1] += lr * error * x[i]; // maj des poids
+                }
+            }
+        }
+    }
 }
 

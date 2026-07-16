@@ -1,4 +1,4 @@
-# Auteur : Nina
+# Auteur : Thinina
 # api/server.py : API REST (FastAPI) pour le client web.
 # Fonctions : uploader une image, CHOISIR le modele, predire ; lister les modeles.
 # Chaine : image -> vecteur (preprocessing) -> modele (Rust via ctypes) -> classe.
@@ -89,7 +89,7 @@ def _charger_modeles():
         modeles = [RBFNetwork.from_state(s) for s in data["modeles"]]
         return UnContreTous(modeles, data["classes"])
 
-    essayer("mlp", _charger_mlp)   # MLP (Nina)
+    essayer("mlp", _charger_mlp)   # MLP (Thinina)
     essayer("lineaire", lambda: UnContreTous.load_json(_chemin_modele("lineaire_weights.json")))  # Valentin (un-contre-tous)
     essayer("svm", lambda: UnContreTous.load_json(_chemin_modele("svm_weights.json")))            # Valentin (un-contre-tous)
     essayer("rbf", _charger_rbf)                                                                    # Ali (un-contre-tous)
