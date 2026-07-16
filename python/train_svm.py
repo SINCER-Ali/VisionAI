@@ -58,9 +58,11 @@ if __name__ == "__main__":
                                  lr=LR, epochs=EPOCHS, gamma=GAMMA)
     print(f"Duree entrainement : {time.perf_counter() - t0:.1f} s")
 
+    # Sauvegarde du modele entraine (2 formats) -> l'API le chargera sans re-entrainer.
     dossier = os.path.join(os.path.dirname(__file__), "..", "models")
-    uct.save_json(os.path.join(dossier, "svm_weights.json"))
-    print("Modele sauvegarde dans models/svm_weights.json")
+    uct.save_json(os.path.join(dossier, "svm_weights.json"))          # lisible
+    uct.save_binary(os.path.join(dossier, "svm_weights.bin"))         # compact
+    print("Modele sauvegarde dans models/ (JSON + binaire)")
 
     print(f"\nPrecision entrainement : {precision(uct, X, y):.1f}%")
     print(f"Precision test         : {precision(uct, Xte, yte):.1f}%")

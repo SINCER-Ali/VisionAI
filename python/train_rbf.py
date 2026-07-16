@@ -1,9 +1,8 @@
 # un rbf par classe (one-vs-rest) sur les images, puis sauvegarde
 import os
-import json
 import time
 import numpy as np
-from bindings import RBFNetwork
+from bindings import RBFNetwork, UnContreTous
 
 CLASSES = ["aucun", "humain", "animal"]   # aucun=0, humain=1, animal=2
 
@@ -51,15 +50,15 @@ if __name__ == "__main__":
     modeles = [entraine_un(X_train, y_train, c) for c in range(len(CLASSES))]
     print(f"Duree entrainement : {time.perf_counter() - t0:.1f} s")
 
-    # sauvegarde des 3 modeles (json lisible + binaire par modele)
+    # Sauvegarde du modele entraine (2 formats) -> l'API le chargera sans re-entrainer.
+    # On passe par UnContreTous : meme mecanique que le lineaire et le SVM, et les
+    # 3 reseaux tiennent dans UN SEUL fichier (au lieu d'un fichier par classe).
     dossier = os.path.join(os.path.dirname(__file__), "..", "models")
     os.makedirs(dossier, exist_ok=True)
-    etats = [m.get_state() for m in modeles]
-    with open(os.path.join(dossier, "rbf_weights.json"), "w", encoding="utf-8") as f:
-        json.dump({"classes": CLASSES, "modeles": etats}, f)
-    for i, m in enumerate(modeles):
-        m.save_binary(os.path.join(dossier, f"rbf_{i}.bin"))
-    print("Modeles sauvegardes dans models/ (rbf_weights.json + rbf_0/1/2.bin)")
+    uct = UnContreTous(modeles, CLASSES)
+    uct.save_json(os.path.join(dossier, "rbf_weights.json"))          # lisible
+    uct.save_binary(os.path.join(dossier, "rbf_weights.bin"))         # compact
+    print("Modele sauvegarde dans models/ (JSON + binaire)")
 
     print(f"\nPrecision entrainement : {precision(modeles, X_train, y_train):.1f}%")
     print(f"Precision test         : {precision(modeles, X_test, y_test):.1f}%")

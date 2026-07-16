@@ -82,17 +82,11 @@ def _charger_modeles():
         except Exception as e:
             print(f"[startup] modele '{nom}' NON charge ({e}) -> lancez son train_*.py")
 
-    def _charger_rbf():
-        # RBF d'Ali : rbf_weights.json = {"classes":..., "modeles":[etats]} (un-contre-tous)
-        with open(_chemin_modele("rbf_weights.json"), encoding="utf-8") as f:
-            data = json.load(f)
-        modeles = [RBFNetwork.from_state(s) for s in data["modeles"]]
-        return UnContreTous(modeles, data["classes"])
-
-    essayer("mlp", _charger_mlp)   # MLP (Thinina)
-    essayer("lineaire", lambda: UnContreTous.load_json(_chemin_modele("lineaire_weights.json")))  # Valentin (un-contre-tous)
-    essayer("svm", lambda: UnContreTous.load_json(_chemin_modele("svm_weights.json")))            # Valentin (un-contre-tous)
-    essayer("rbf", _charger_rbf)                                                                    # Ali (un-contre-tous)
+    essayer("mlp", _charger_mlp)   # MLP (Thinina) : nativement multi-classe
+    # Les 3 autres sont des modeles BINAIRES combines en un-contre-tous -> meme chargement.
+    essayer("lineaire", lambda: UnContreTous.load_json(_chemin_modele("lineaire_weights.json")))  # Valentin
+    essayer("svm", lambda: UnContreTous.load_json(_chemin_modele("svm_weights.json")))            # Valentin
+    essayer("rbf", lambda: UnContreTous.load_json(_chemin_modele("rbf_weights.json")))            # Ali
     print(f"[startup] modeles disponibles : {list(MODELES.keys())}")
 
 

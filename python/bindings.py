@@ -308,10 +308,86 @@ class UnContreTous:
     def load_json(chemin):
         with open(chemin, "r", encoding="utf-8") as f:
             data = json.load(f)
-        modeles = []
-        for e in data["sous_modeles"]:
-            modeles.append(SVM._depuis_etat(e) if e["type"] == "svm" else ModeleLineaire._depuis_etat(e))
+        modeles = [UnContreTous._reconstruire(e) for e in data["sous_modeles"]]
         return UnContreTous(modeles, data["classes"])
+
+    # les 3 modeles BINAIRES du projet, reconnus par le champ "type" de leur etat
+    @staticmethod
+    def _reconstruire(e):
+        t = e.get("type")
+        if t == "svm":
+            return SVM._depuis_etat(e)
+        if t == "rbf":
+            return RBFNetwork._depuis_etat(e)
+        return ModeleLineaire._depuis_etat(e)
+
+    # --- Sauvegarde BINAIRE (compacte) de l'ensemble un-contre-tous ---------------
+    # UN SEUL fichier pour les N sous-modeles (contrairement a un fichier par modele).
+    # Format :
+    #   entete : 3 int32  ->  [type, nb_modeles, nb_classes]
+    #            type : 0 = lineaire, 1 = svm, 2 = rbf
+    #   puis, pour CHAQUE sous-modele :
+    #     lineaire : 1 int32 [input_dim]      + (input_dim+1) double   (poids)
+    #     svm      : 2 int32 [n, dim]         + 2 double [bias, gamma]
+    #                + (n + n + n*dim) double (alphas, y_train, x_train)
+    #     rbf      : 2 int32 [nb_c, taille_c] + 1 double [gamma]
+    #                + (nb_c*taille_c + nb_c) double  (centres aplatis, poids)
+    # Tous les sous-modeles sont du meme type (ils sortent de la meme fabrique).
+    TYPES = {"lineaire": 0, "svm": 1, "rbf": 2}
+
+    def save_binary(self, chemin):
+        etats = [m._etat() for m in self.sous_modeles]
+        type_code = UnContreTous.TYPES[etats[0]["type"]]
+        with open(chemin, "wb") as f:
+            array.array("i", [type_code, len(etats), len(self.classes)]).tofile(f)
+            for e in etats:
+                if type_code == 0:                                    # lineaire
+                    array.array("i", [e["input_dim"]]).tofile(f)
+                    array.array("d", e["poids"]).tofile(f)
+                elif type_code == 1:                                  # svm
+                    array.array("i", [e["n"], e["dim"]]).tofile(f)
+                    array.array("d", [e["bias"], e["gamma"]]).tofile(f)
+                    array.array("d", e["alphas"] + e["y_train"] + e["x_train"]).tofile(f)
+                else:                                                 # rbf
+                    nb = len(e["centres"])
+                    taille = len(e["centres"][0]) if nb else 0
+                    array.array("i", [nb, taille]).tofile(f)
+                    array.array("d", [e["gamma"]]).tofile(f)
+                    array.array("d", [v for ligne in e["centres"] for v in ligne]
+                                + list(e["poids"])).tofile(f)
+
+    @staticmethod
+    def load_binary(chemin):
+        with open(chemin, "rb") as f:
+            entete = array.array("i"); entete.fromfile(f, 3)
+            type_code, nb_modeles, n_classes = entete[0], entete[1], entete[2]
+            modeles = []
+            for _ in range(nb_modeles):
+                if type_code == 0:                                    # lineaire
+                    dim = array.array("i"); dim.fromfile(f, 1)
+                    poids = array.array("d"); poids.fromfile(f, dim[0] + 1)
+                    modeles.append(ModeleLineaire._depuis_etat(
+                        {"input_dim": dim[0], "poids": list(poids)}))
+                elif type_code == 1:                                  # svm
+                    hd = array.array("i"); hd.fromfile(f, 2)
+                    n, dim = hd[0], hd[1]
+                    scal = array.array("d"); scal.fromfile(f, 2)
+                    corps = array.array("d"); corps.fromfile(f, n + n + n * dim)
+                    modeles.append(SVM._depuis_etat(
+                        {"n": n, "dim": dim, "bias": scal[0], "gamma": scal[1],
+                         "alphas": list(corps[:n]), "y_train": list(corps[n:2 * n]),
+                         "x_train": list(corps[2 * n:])}))
+                else:                                                 # rbf
+                    hd = array.array("i"); hd.fromfile(f, 2)
+                    nb_c, taille = hd[0], hd[1]
+                    g = array.array("d"); g.fromfile(f, 1)
+                    vals = array.array("d"); vals.fromfile(f, nb_c * taille + nb_c)
+                    plat = list(vals[:nb_c * taille])
+                    modeles.append(RBFNetwork._depuis_etat({
+                        "gamma": g[0],
+                        "centres": [plat[i * taille:(i + 1) * taille] for i in range(nb_c)],
+                        "poids": list(vals[nb_c * taille:])}))
+        return UnContreTous(modeles, list(range(n_classes)))
 
 
 ### =================== Modele MLP / PMC (Thinina) =================== ###
@@ -519,6 +595,19 @@ class RBFNetwork:
         obj._ptr = lib.rbf_charger(_c_doubles(plat), nb, taille,
                                    _c_doubles(s["poids"]), len(s["poids"]), s["gamma"])
         return obj
+
+    # --- Adaptateurs (Thinina) : interface commune attendue par UnContreTous -------
+    # Ali nomme ses methodes get_state / from_state ; le lineaire et le SVM utilisent
+    # _etat / _depuis_etat. Ces 2 adaptateurs mettent les 3 modeles binaires sous la
+    # MEME interface, sans rien changer au code d'Ali ci-dessus.
+    def _etat(self):
+        e = self.get_state()
+        e["type"] = "rbf"          # pour que UnContreTous sache quoi reconstruire
+        return e
+
+    @staticmethod
+    def _depuis_etat(e):
+        return RBFNetwork.from_state(e)
 
     def save_json(self, chemin):
         with open(chemin, "w", encoding="utf-8") as f:
