@@ -1,17 +1,6 @@
-"""
-train_svm.py -- entraine le SVM (un-contre-tous) sur les vraies images, puis
-SAUVEGARDE le modele pre-entraine (JSON + binaire) pour l'API.
-
-Le SVM est binaire (+1/-1). Pour les 3 classes, on entraine 1 SVM par classe
-(un-contre-tous).
-
-/!\ Le SVM a noyau GARDE tous les exemples d'entrainement -> sur des images
-(12288 valeurs) le modele devient tres lourd et lent. On SOUS-ECHANTILLONNE
-donc l'entrainement (MAX_EXEMPLES) et on utilise le noyau LINEAIRE (gamma=0),
-plus leger. (Limite a discuter dans le rapport.)
-
-Lancer : ../.venv/Scripts/python.exe train_svm.py
-"""
+# Auteur : Thinina
+# Entraine le SVM en un-contre-tous sur les images, puis sauvegarde (JSON + binaire).
+# Le SVM a noyau garde tous ses exemples -> cout O(n^2), d'ou MAX_EXEMPLES.
 
 import os
 import time

@@ -1,10 +1,6 @@
 # Auteur : Thinina
-# api/server.py : API REST (FastAPI) pour le client web.
-# Fonctions : uploader une image, CHOISIR le modele, predire ; lister les modeles.
-# Chaine : image -> vecteur (preprocessing) -> modele (Rust via ctypes) -> classe.
-#
-# Lancer :  ..\.venv\Scripts\python.exe -m uvicorn server:app --reload
-#           (depuis api/ ; interface : http://127.0.0.1:8000/docs)
+# API REST (FastAPI) : image -> vecteur -> modele (Rust via ctypes) -> classe.
+# Lancer depuis api/ :  ..\.venv\Scripts\python.exe -m uvicorn server:app --reload
 
 import io
 import os
@@ -27,14 +23,13 @@ LR = 0.01
 
 app = FastAPI(title="VisionAI", description="Classe une image : aucun / humain / animal")
 
-# CORS : autorise le client web (navigateur) a appeler l'API depuis une autre origine.
+# CORS : autorise le client web a appeler l'API depuis une autre origine.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
 
-# Registre des modeles disponibles (nom -> objet modele pret a predire).
-# Rempli au demarrage. C'est ce que le menu du client web affichera.
+# nom du modele -> objet pret a predire ; rempli au demarrage
 MODELES = {}
 
 
@@ -53,13 +48,11 @@ def _chemin_modele(nom):
 
 
 def _charger_mlp():
-    """Charge le MLP PRE-ENTRAINE depuis le disque (demarrage instantane).
-    Si aucun modele n'est sauvegarde, on entraine + sauvegarde (secours)."""
+    """Charge le MLP pre-entraine ; s'il n'existe pas, l'entraine et le sauvegarde."""
     chemin = _chemin_modele("mlp_weights.json")
     if os.path.exists(chemin):
         print(f"[startup] chargement du modele pre-entraine : {chemin}")
-        return MLP.load_json(chemin)                     # <-- charge depuis le disque (JSON)
-    # Secours : pas encore de modele -> entrainement (mieux : lancer train_mlp.py avant)
+        return MLP.load_json(chemin)
     print("[startup] aucun modele sauvegarde -> entrainement (lancez plutot train_mlp.py)")
     X = np.load(_chemin_dataset("X_train.npy"))
     y = np.load(_chemin_dataset("y_train.npy"))
@@ -70,9 +63,7 @@ def _charger_mlp():
 
 
 def _charger_modeles():
-    """(Re)charge TOUS les modeles pre-entraines depuis le disque (models/).
-    Chaque entree : "nom" -> objet avec une methode .predict(vecteur).
-    Un modele dont le fichier manque est simplement ignore (pas de crash)."""
+    """(Re)charge les modeles depuis models/. Un fichier manquant est ignore."""
     MODELES.clear()
 
     def essayer(nom, fabrique):
@@ -82,8 +73,8 @@ def _charger_modeles():
         except Exception as e:
             print(f"[startup] modele '{nom}' NON charge ({e}) -> lancez son train_*.py")
 
-    essayer("mlp", _charger_mlp)   # MLP (Thinina) : nativement multi-classe
-    # Les 3 autres sont des modeles BINAIRES combines en un-contre-tous -> meme chargement.
+    essayer("mlp", _charger_mlp)   # multi-classe natif
+    # les 3 autres sont binaires -> un-contre-tous
     essayer("lineaire", lambda: UnContreTous.load_json(_chemin_modele("lineaire_weights.json")))  # Valentin
     essayer("svm", lambda: UnContreTous.load_json(_chemin_modele("svm_weights.json")))            # Valentin
     essayer("rbf", lambda: UnContreTous.load_json(_chemin_modele("rbf_weights.json")))            # Ali
@@ -103,7 +94,7 @@ def health():
 
 @app.get("/models")
 def liste_modeles():
-    """Liste des modeles disponibles -> alimente le menu deroulant du client web."""
+    """Modeles disponibles -> alimente le menu du client web."""
     return {"modeles": list(MODELES.keys())}
 
 
@@ -121,21 +112,17 @@ async def predict(file: UploadFile = File(...), model: str = Form("mlp")):
         raise HTTPException(404, f"Modele '{model}' inconnu. Dispo : {list(MODELES.keys())}")
     data = await file.read()
     try:
-        vec = image_to_vector(io.BytesIO(data)).tolist()   # image -> vecteur 12288
+        vec = image_to_vector(io.BytesIO(data)).tolist()
     except Exception as e:
         raise HTTPException(400, f"Image illisible : {e}")
     import math
     sorties = MODELES[model].predict(vec)
-    # Robuste aux 2 familles de modeles :
-    #  - MLP / RBF  -> renvoient une LISTE de scores (un par classe) -> argmax
-    #  - lineaire / SVM (binaires) -> renvoient UN seul score -> signe
     sorties = list(sorties) if isinstance(sorties, (list, tuple)) else [float(sorties)]
-    # securite : on remplace inf/nan (modele divergent) par 0 -> pas de crash JSON
-    sorties = [v if math.isfinite(v) else 0.0 for v in sorties]
-    if len(sorties) >= len(CLASSES):                       # modele multi-classe
+    sorties = [v if math.isfinite(v) else 0.0 for v in sorties]   # inf/nan -> 0 : pas de crash JSON
+    if len(sorties) >= len(CLASSES):                       # multi-classe -> argmax
         idx = int(np.argmax(sorties[:len(CLASSES)]))
         scores = {CLASSES[i]: round(float(sorties[i]), 3) for i in range(len(CLASSES))}
-    else:                                                  # modele binaire (+1 / -1)
+    else:                                                  # binaire -> signe
         idx = 0 if sorties[0] >= 0 else 1
         scores = {"score": round(float(sorties[0]), 3)}
     return {"modele": model, "classe": CLASSES[idx], "scores": scores}

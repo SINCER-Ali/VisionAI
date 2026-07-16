@@ -11,11 +11,8 @@ m.fit(X, Y, steps=50_000, lr=0.01, is_classification=True)        # entraine
 bien = sum(1 for x, y in zip(X, Y) if (m.predict(x)[0] >= 0) == (y[0] >= 0))
 print(f"Linear Simple : {bien}/{len(X)} bien classes")            # vise 3/3
 
-# --- Test 2 : XOR (non separable) -> il FAUT une couche cachee ---
-# /!\ Le MLP est NON CONVEXE : avec l'architecture minimale [2,2,1], la descente de
-# gradient se coince dans un minimum local selon le tirage initial (environ 1 fois sur 2).
-# On reinitialise donc jusqu'a 5 fois : c'est le traitement standard d'une optimisation
-# non convexe, pas un contournement.
+# --- Test 2 : XOR (non separable) -> il faut une couche cachee ---
+# [2,2,1] se coince parfois dans un minimum local selon l'init -> on reessaie.
 Xxor = [[1.0, 0.0], [0.0, 1.0], [0.0, 0.0], [1.0, 1.0]]           # les 4 points du XOR
 Yxor = [[1.0], [1.0], [-1.0], [-1.0]]                             # classes du XOR
 bienxor = 0

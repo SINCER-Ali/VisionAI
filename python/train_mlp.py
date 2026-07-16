@@ -1,10 +1,6 @@
-"""
-train_mlp.py -- entraine le MLP sur les VRAIES images et mesure sa precision.
-
-Chaine : datasets/*.npy -> MLP (Rust) -> precision sur le jeu de test.
-Lancer :  ../.venv/Scripts/python.exe train_mlp.py
-(Avoir lance preprocessing.py avant, et compile la lib : cargo build --release)
-"""
+# Auteur : Thinina
+# Entraine le MLP sur les images et sauvegarde (JSON + binaire).
+# Prerequis : preprocessing.py et cargo build --release.
 
 import os
 import time
@@ -25,7 +21,7 @@ def charger(nom):
 
 
 def one_hot_pm1(y, n_classes):
-    """Etiquette 2 -> [-1, -1, +1]  (codage +/-1 pour tanh)."""
+    """Etiquette 2 -> [-1, -1, +1] : codage +/-1, adapte a tanh."""
     Y = -np.ones((len(y), n_classes))
     Y[np.arange(len(y)), y] = 1.0
     return Y
@@ -34,7 +30,7 @@ def one_hot_pm1(y, n_classes):
 def precision(model, X, y):
     bons = 0
     for x, vrai in zip(X, y):
-        pred = model.predict(x, is_classification=True)  # 3 sorties
+        pred = model.predict(x, is_classification=True)
         if np.argmax(pred) == vrai:                       # classe = plus grande sortie
             bons += 1
     return 100.0 * bons / len(X)
@@ -59,7 +55,7 @@ if __name__ == "__main__":
     duree = time.perf_counter() - t0
     print(f"Duree entrainement : {duree:.1f} s")
 
-    # Sauvegarde du modele entraine (2 formats) -> l'API le chargera sans re-entrainer.
+    # 2 formats : JSON lisible, binaire compact
     dossier = os.path.join(os.path.dirname(__file__), "..", "models")
     model.save_json(os.path.join(dossier, "mlp_weights.json"))    # lisible
     model.save_binary(os.path.join(dossier, "mlp_weights.bin"))   # compact
@@ -70,7 +66,7 @@ if __name__ == "__main__":
     print(f"\nPrecision entrainement : {acc_train:.1f}%")
     print(f"Precision test         : {acc_test:.1f}%")
 
-    # Precision par classe (pour voir les classes sous-representees)
+    # precision par classe
     print("\nDetail par classe (sur le test) :")
     for etiquette, classe in enumerate(CLASSES):
         idx = np.where(y_test == etiquette)[0]

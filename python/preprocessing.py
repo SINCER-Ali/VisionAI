@@ -1,21 +1,13 @@
-"""
-preprocessing.py -- transforme les images en tableaux .npy pour le MLP.
-
-Chaine : datasets/train/{aucun,humain,animal}/*.jpg
-      -> redimension 64x64x3, normalisation [0,1], aplatissement (12288 valeurs)
-      -> decoupage train / test
-      -> datasets/X_train.npy, y_train.npy, X_test.npy, y_test.npy
-
-Lancer :  ../.venv/Scripts/python.exe preprocessing.py
-A relancer a chaque fois que tu ajoutes des photos.
-"""
+# Auteur : Thinina
+# Images -> 64x64x3 normalise et aplati (12288 valeurs) -> decoupage train/test -> .npy
+# A relancer uniquement quand les images changent.
 
 import os
 import numpy as np
 from PIL import Image
 from pillow_heif import register_heif_opener
 
-register_heif_opener()   # active la lecture des .heic (format natif des iPhone)
+register_heif_opener()   # lecture des .heic
 
 # --- Reglages ---
 DOSSIER = os.path.join(os.path.dirname(__file__), "..", "datasets", "train")
@@ -27,10 +19,9 @@ np.random.seed(42)                        # decoupage reproductible
 
 
 def image_to_vector(chemin, taille=TAILLE):
-    """UNE image -> un vecteur de taille*taille*3 valeurs dans [0,1].
-    Utilisee ici (dataset) ET par l'API (image envoyee par l'utilisateur)."""
-    img = Image.open(chemin).convert("RGB").resize((taille, taille))  # RGB + redimension
-    return np.asarray(img, dtype=np.float64).ravel() / 255.0          # aplati + normalise
+    """Une image -> un vecteur de taille*taille*3 valeurs dans [0,1]."""
+    img = Image.open(chemin).convert("RGB").resize((taille, taille))
+    return np.asarray(img, dtype=np.float64).ravel() / 255.0
 
 
 def charger_images():
@@ -43,7 +34,7 @@ def charger_images():
         for nom in fichiers:
             chemin = os.path.join(dossier_classe, nom)
             try:
-                X.append(image_to_vector(chemin))  # meme conversion que l'API
+                X.append(image_to_vector(chemin))
             except Exception as e:
                 print(f"    /!\\ image ignoree ({nom}) : {e}")
                 continue

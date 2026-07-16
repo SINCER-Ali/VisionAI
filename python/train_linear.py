@@ -1,13 +1,6 @@
-"""
-train_linear.py -- entraine le modele LINEAIRE (un-contre-tous) sur les vraies
-images, puis SAUVEGARDE le modele pre-entraine (JSON + binaire) pour l'API.
-
-Le modele lineaire est binaire (+1/-1). Pour les 3 classes, on entraine
-1 modele par classe (un-contre-tous) = le "Linear Model x3" du cours.
-
-Lancer : ../.venv/Scripts/python.exe train_linear.py
-(preprocessing.py lance avant, et cargo build --release)
-"""
+# Auteur : Thinina
+# Entraine le modele lineaire en un-contre-tous (1 par classe), puis sauvegarde
+# (JSON + binaire). Prerequis : preprocessing.py et cargo build --release.
 
 import os
 import time

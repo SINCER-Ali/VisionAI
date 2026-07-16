@@ -80,8 +80,7 @@ class ModeleLineaire:
         return lib.linear_predict(self._ptr, x_c, self.input_dim)
 
     def fit_regression(self, X, Y, lr=0.01, epochs=1000):
-        """Entraine en REGRESSION (valeur continue), pas en classification.
-        Y contient des reels quelconques (2, 3, 2.5...), pas des +1/-1."""
+        """Entraine en regression : Y contient des reels, pas des +1/-1."""
         n = len(X)
         plat = [float(v) for exemple in X for v in exemple]
         X_c = (ctypes.c_double * len(plat))(*plat)
@@ -89,7 +88,7 @@ class ModeleLineaire:
         lib.linear_train_regression(self._ptr, X_c, Y_c, n, self.input_dim, lr, epochs)
 
     def predict_value(self, x):
-        # valeur brute (avant le signe) -> utile pour le un-contre-tous ET la regression
+        # valeur brute, avant le signe
         x_c = (ctypes.c_double * len(x))(*x)
         return lib.linear_predict_value(self._ptr, x_c, self.input_dim)
 
@@ -103,7 +102,6 @@ class ModeleLineaire:
         buf = (ctypes.c_double * len(w))(*w)
         lib.linear_import_weights(self._ptr, buf, len(w))
 
-    # etat serialisable (pour le un-contre-tous)
     def _etat(self):
         return {"type": "lineaire", "input_dim": self.input_dim, "poids": self.get_weights()}
 
@@ -201,11 +199,10 @@ class SVM:
         return lib.svm_predict(self._ptr, x_c, self.input_dim)
 
     def decision_value(self, x):
-        # valeur continue (avant le signe) -> pour le un-contre-tous
+        # valeur continue, avant le signe
         x_c = (ctypes.c_double * len(x))(*x)
         return lib.svm_decision_value(self._ptr, x_c, self.input_dim)
 
-    # etat serialisable complet (alphas + bias + gamma + exemples)
     def _etat(self):
         n = lib.svm_nb_samples(self._ptr)
         dim = lib.svm_input_dim(self._ptr)
@@ -218,7 +215,7 @@ class SVM:
 
     @staticmethod
     def _depuis_etat(e):
-        obj = SVM.__new__(SVM)                 # on ne rappelle pas svm_create (on charge directement)
+        obj = SVM.__new__(SVM)                 # pas de svm_create : on charge directement
         obj.input_dim = e["dim"]
         a = (ctypes.c_double * len(e["alphas"]))(*e["alphas"])
         xf = (ctypes.c_double * len(e["x_train"]))(*e["x_train"])
@@ -263,17 +260,15 @@ class SVM:
             self._ptr = None
 
 
-# =================== Un-contre-tous : rend un modele BINAIRE (lineaire/SVM) multi-classe ===================
+# Un-contre-tous : rend multi-classe un modele binaire (lineaire / SVM / RBF).
 class UnContreTous:
-    """Enveloppe N modeles binaires (un par classe). C'est le "Linear Model x3" du cours.
-    predict(x) renvoie la LISTE des scores continus (un par classe) -> l'API fait argmax."""
+    """N modeles binaires, un par classe. predict(x) renvoie la liste des scores."""
 
     def __init__(self, sous_modeles, classes):
         self.sous_modeles = sous_modeles   # liste de modeles binaires (ModeleLineaire ou SVM)
         self.classes = classes             # noms des classes (ex. ["aucun","humain","animal"])
 
     def predict(self, x, is_classification=True):
-        # renvoie la valeur CONTINUE de chaque sous-modele (un par classe) -> argmax cote API
         scores = []
         for m in self.sous_modeles:
             if hasattr(m, "decision_value"):     # SVM
@@ -311,7 +306,6 @@ class UnContreTous:
         modeles = [UnContreTous._reconstruire(e) for e in data["sous_modeles"]]
         return UnContreTous(modeles, data["classes"])
 
-    # les 3 modeles BINAIRES du projet, reconnus par le champ "type" de leur etat
     @staticmethod
     def _reconstruire(e):
         t = e.get("type")
@@ -321,18 +315,8 @@ class UnContreTous:
             return RBFNetwork._depuis_etat(e)
         return ModeleLineaire._depuis_etat(e)
 
-    # --- Sauvegarde BINAIRE (compacte) de l'ensemble un-contre-tous ---------------
-    # UN SEUL fichier pour les N sous-modeles (contrairement a un fichier par modele).
-    # Format :
-    #   entete : 3 int32  ->  [type, nb_modeles, nb_classes]
-    #            type : 0 = lineaire, 1 = svm, 2 = rbf
-    #   puis, pour CHAQUE sous-modele :
-    #     lineaire : 1 int32 [input_dim]      + (input_dim+1) double   (poids)
-    #     svm      : 2 int32 [n, dim]         + 2 double [bias, gamma]
-    #                + (n + n + n*dim) double (alphas, y_train, x_train)
-    #     rbf      : 2 int32 [nb_c, taille_c] + 1 double [gamma]
-    #                + (nb_c*taille_c + nb_c) double  (centres aplatis, poids)
-    # Tous les sous-modeles sont du meme type (ils sortent de la meme fabrique).
+    # Sauvegarde binaire : un seul fichier pour les N sous-modeles.
+    # entete : 3 int32 [type, nb_modeles, nb_classes], puis chaque sous-modele.
     TYPES = {"lineaire": 0, "svm": 1, "rbf": 2}
 
     def save_binary(self, chemin):
@@ -576,7 +560,6 @@ class RBFNetwork:
         return lib.rbf_predict_class(self._ptr, _c_doubles(x), len(x))
 
     def get_state(self):
-        # centres + poids + gamma depuis le rust
         nb = lib.rbf_nb_centres(self._ptr)
         taille = lib.rbf_taille_centre(self._ptr)
         c = (ctypes.c_double * (nb * taille))()
@@ -596,13 +579,11 @@ class RBFNetwork:
                                    _c_doubles(s["poids"]), len(s["poids"]), s["gamma"])
         return obj
 
-    # --- Adaptateurs (Thinina) : interface commune attendue par UnContreTous -------
-    # Ali nomme ses methodes get_state / from_state ; le lineaire et le SVM utilisent
-    # _etat / _depuis_etat. Ces 2 adaptateurs mettent les 3 modeles binaires sous la
-    # MEME interface, sans rien changer au code d'Ali ci-dessus.
+    # Adaptateurs (Thinina) : Ali nomme ses methodes get_state / from_state,
+    # le lineaire et le SVM utilisent _etat / _depuis_etat -> on aligne les 3.
     def _etat(self):
         e = self.get_state()
-        e["type"] = "rbf"          # pour que UnContreTous sache quoi reconstruire
+        e["type"] = "rbf"
         return e
 
     @staticmethod

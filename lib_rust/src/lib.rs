@@ -3,7 +3,7 @@
 
 use std::slice;
 
-// ===================== MODELE LINEAIRE (Valentin BROUC) =====================
+// Modele lineaire (Valentin BROUC)
 mod linear;
 use linear::LinearModel;
 
@@ -42,7 +42,7 @@ pub extern "C" fn linear_destroy(model_ptr: *mut LinearModel) {
     }
 }
 
-// ===================== MODELE SVM (Valentin BROUC) =====================
+// SVM (Valentin BROUC)
 mod svm;
 use svm::SVMModel;
 
@@ -82,7 +82,7 @@ pub extern "C" fn svm_destroy(model_ptr: *mut SVMModel) {
     }
 }
 
-// ===================== MODELE MLP / PMC (Thinina) =====================
+// MLP / PMC (Thinina)
 mod mlp;
 use mlp::MLP;
 
@@ -196,7 +196,7 @@ pub extern "C" fn rbf_free(ptr: *mut RBFNetwork) {
     unsafe { drop(Box::from_raw(ptr)); }
 }
 
-// sauvegarde : on sort les centres, les poids et gamma vers python
+// sauvegarde : centres, poids et gamma
 #[no_mangle]
 pub extern "C" fn rbf_gamma(ptr: *mut RBFNetwork) -> f64 { unsafe { &*ptr }.gamma() }
 
@@ -228,7 +228,7 @@ pub extern "C" fn rbf_charger(centres: *const f64, nb: usize, taille: usize,
     Box::into_raw(Box::new(RBFNetwork::depuis_params(c, nb, taille, p, gamma)))
 }
 
-// ===================== Ajout (Thinina) : save/load LINEAIRE (Valentin) =====================
+// save/load lineaire (Thinina)
 #[no_mangle]
 pub extern "C" fn linear_export_weights(ptr: *mut LinearModel, out: *mut f64, len: usize) {
     let w = unsafe { &*ptr }.get_weights();
@@ -242,7 +242,7 @@ pub extern "C" fn linear_import_weights(ptr: *mut LinearModel, inp: *const f64, 
     unsafe { &mut *ptr }.set_weights(w);
 }
 
-// valeur brute (avant signe) -> utile pour le un-contre-tous (argmax)
+// valeur brute, pour le un-contre-tous
 #[no_mangle]
 pub extern "C" fn linear_predict_value(ptr: *mut LinearModel, x_ptr: *const f64, input_dim: usize) -> f64 {
     let model = unsafe { &*ptr };
@@ -250,7 +250,7 @@ pub extern "C" fn linear_predict_value(ptr: *mut LinearModel, x_ptr: *const f64,
     model.predict_value(x)
 }
 
-// entrainement en REGRESSION (Widrow-Hoff) -> cas de regression du prof
+// entrainement en regression (Widrow-Hoff)
 #[no_mangle]
 pub extern "C" fn linear_train_regression(
     model_ptr: *mut LinearModel,
@@ -267,7 +267,7 @@ pub extern "C" fn linear_train_regression(
     model.train_regression(all_x, all_y, n_samples, input_dim, lr, epochs);
 }
 
-// ===================== Ajout (Thinina) : save/load SVM (Valentin) =====================
+// save/load SVM (Thinina)
 #[no_mangle]
 pub extern "C" fn svm_nb_samples(ptr: *mut SVMModel) -> usize { unsafe { &*ptr }.nb_samples() }
 #[no_mangle]
