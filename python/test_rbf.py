@@ -21,4 +21,4 @@ rbf.train(data, targets, k=4, iterations=100)
 # on teste les predictions
 for x, expected in zip(data, targets):
     pred = rbf.predict_class(x)
-    print(f"input {x} → predit {pred}, attendu {expected}, {'OK' if pred == expected else 'FAUX'}")
+    print(f"input {x} -> predit {pred}, attendu {expected}, {'OK' if pred == expected else 'FAUX'}")
