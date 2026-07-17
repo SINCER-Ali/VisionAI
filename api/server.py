@@ -17,9 +17,6 @@ from bindings import MLP, ModeleLineaire, SVM, UnContreTous, RBFNetwork  # noqa:
 from preprocessing import image_to_vector
 
 CLASSES = ["aucun", "humain", "animal"]  # aucun=0, humain=1, animal=2
-CACHEE = 32
-STEPS = 30_000
-LR = 0.01
 
 app = FastAPI(title="VisionAI", description="Classe une image : aucun / humain / animal")
 
@@ -33,37 +30,13 @@ app.add_middleware(
 MODELES = {}
 
 
-def _chemin_dataset(nom):
-    return os.path.join(os.path.dirname(__file__), "..", "datasets", nom)
-
-
-def _one_hot_pm1(y, n_classes):
-    Y = -np.ones((len(y), n_classes))
-    Y[np.arange(len(y)), y] = 1.0
-    return Y
-
-
 def _chemin_modele(nom):
     return os.path.join(os.path.dirname(__file__), "..", "models", nom)
 
 
-def _charger_mlp():
-    """Charge le MLP pre-entraine ; s'il n'existe pas, l'entraine et le sauvegarde."""
-    chemin = _chemin_modele("mlp_weights.json")
-    if os.path.exists(chemin):
-        print(f"[startup] chargement du modele pre-entraine : {chemin}")
-        return MLP.load_json(chemin)
-    print("[startup] aucun modele sauvegarde -> entrainement (lancez plutot train_mlp.py)")
-    X = np.load(_chemin_dataset("X_train.npy"))
-    y = np.load(_chemin_dataset("y_train.npy"))
-    m = MLP([X.shape[1], CACHEE, len(CLASSES)])
-    m.fit(X, _one_hot_pm1(y, len(CLASSES)), steps=STEPS, lr=LR, is_classification=True)
-    m.save_json(chemin)
-    return m
-
-
 def _charger_modeles():
-    """(Re)charge les modeles depuis models/. Un fichier manquant est ignore."""
+    """Charge les modeles PRE-ENTRAINES depuis models/. Un fichier manquant est
+    simplement ignore (pas de crash) -> lancer le train_*.py correspondant."""
     MODELES.clear()
 
     def essayer(nom, fabrique):
@@ -73,11 +46,11 @@ def _charger_modeles():
         except Exception as e:
             print(f"[startup] modele '{nom}' NON charge ({e}) -> lancez son train_*.py")
 
-    essayer("mlp", _charger_mlp)   # multi-classe natif
-    # les 3 autres sont binaires -> un-contre-tous
-    essayer("lineaire", lambda: UnContreTous.load_json(_chemin_modele("lineaire_weights.json")))  # Valentin
-    essayer("svm", lambda: UnContreTous.load_json(_chemin_modele("svm_weights.json")))            # Valentin
-    essayer("rbf", lambda: UnContreTous.load_json(_chemin_modele("rbf_weights.json")))            # Ali
+    # MLP : nativement multi-classe. Les 3 autres : binaires -> un-contre-tous.
+    essayer("mlp", lambda: MLP.load_json(_chemin_modele("mlp_weights.json")))
+    essayer("lineaire", lambda: UnContreTous.load_json(_chemin_modele("lineaire_weights.json")))
+    essayer("svm", lambda: UnContreTous.load_json(_chemin_modele("svm_weights.json")))
+    essayer("rbf", lambda: UnContreTous.load_json(_chemin_modele("rbf_weights.json")))
     print(f"[startup] modeles disponibles : {list(MODELES.keys())}")
 
 
@@ -100,7 +73,8 @@ def liste_modeles():
 
 @app.post("/reload-models")
 def reload_models():
-    """Recharge/reentraine les modeles sans redemarrer le serveur."""
+    """Recharge les modeles depuis le disque sans redemarrer le serveur.
+    Utile apres avoir (re)lance un train_*.py pendant que l'API tourne."""
     _charger_modeles()
     return {"status": "recharge", "modeles": list(MODELES.keys())}
 

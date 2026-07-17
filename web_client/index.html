@@ -261,10 +261,9 @@
             </div>
             <div class="model-select">
                 <label for="model-name">Modele :</label>
-                <select id="model-name">
-                    <option value="mlp">mlp</option>
-                    <option value="rbf">rbf</option>
-                    <option value="svm">svm</option>
+                <!-- rempli dynamiquement depuis la route GET /models de l'API -->
+                <select id="model-name" disabled>
+                    <option>chargement...</option>
                 </select>
                 <button id="btn-refresh" type="button" title="Rafraichir la liste">Rafraichir</button>
             </div>
@@ -431,13 +430,16 @@
                         opt.textContent = nom;
                         modelSelect.appendChild(opt);
                     });
+                    modelSelect.disabled = false;
+                    hideError();
                 } else {
+                    // aucun modele charge cote API -> on n'invente pas un modele qui n'existe pas
                     var opt = document.createElement('option');
-                    opt.value = 'mlp';
-                    opt.textContent = 'mlp';
+                    opt.textContent = 'aucun modele disponible';
                     modelSelect.appendChild(opt);
+                    modelSelect.disabled = true;
+                    showError('Aucun modele charge par l\'API. Lancez les scripts train_*.py.');
                 }
-                hideError();
             } catch (e) {
                 showError(e.message);
             }

@@ -31,7 +31,8 @@ impl RBFNetwork {
         let n = data.len();
         let dim = data[0].len();
 
-        // Étape 1 : k exemples au hasard comme centres de depart
+        // Étape 1 : k centres de depart, pris a intervalle regulier (un exemple tous les n/k).
+        // Deterministe, donc reproductible.
         self.centers = (0..k).map(|i| data[i * n / k].clone()).collect();
 
         for _ in 0..iterations {

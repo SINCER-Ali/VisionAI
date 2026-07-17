@@ -91,7 +91,6 @@ impl SVMModel {
                 self.alphas[i] += lr * (1.0 - self.y_train[i] * s);   // gradient du dual
                 if self.alphas[i] < 0.0 {
                     self.alphas[i] = 0.0;
-                    self.alphas[i] = 0.0;   // projection sur alphas >= 0
                 }
             }
         }
