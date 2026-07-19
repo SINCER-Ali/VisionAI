@@ -8,8 +8,8 @@ import numpy as np
 from bindings import ModeleLineaire, UnContreTous
 
 CLASSES = ["aucun", "humain", "animal"]
-LR = 0.01        # learning rate
-EPOCHS = 50      # passages sur les donnees
+LR = 0.0001        # learning rate
+EPOCHS = 200      # passages sur les donnees
 
 
 def charger(nom):

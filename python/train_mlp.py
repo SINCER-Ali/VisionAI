@@ -11,8 +11,8 @@ CLASSES = ["aucun", "humain", "animal"]   # aucun=0, humain=1, animal=2
 
 # --- Hyperparametres a manipuler ---
 CACHEE = 32          # nb de neurones de la couche cachee
-STEPS = 50_000       # nb d'iterations d'entrainement
-LR = 0.01            # learning rate
+STEPS = 10_000       # nb d'iterations d'entrainement
+LR = 0.001           # learning rate
 
 
 def charger(nom):
@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     Y_train = one_hot_pm1(y_train, n_classes)
 
-    model = MLP(arch)
+    model = MLP(arch, activation="sigmoid")
     print("Entrainement en cours...")
     t0 = time.perf_counter()
     model.fit(X_train, Y_train, steps=STEPS, lr=LR, is_classification=True)
